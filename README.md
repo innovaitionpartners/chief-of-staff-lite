@@ -197,3 +197,7 @@ The current build passes 16 deterministic installer and security tests, both Ski
 ## About
 
 Chief of Staff Lite is created by **InnovAItion Partners** as a practical introduction to using AI for a structured CEO daily sweep.
+
+## License
+
+Chief of Staff Lite is available under the [MIT License](LICENSE).
