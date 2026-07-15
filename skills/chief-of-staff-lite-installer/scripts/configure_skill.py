@@ -17,7 +17,8 @@ import zipfile
 
 
 SKILL_NAME = "chief-of-staff-lite"
-PLATFORMS = {"codex", "claude", "chatgpt"}
+PLATFORMS = {"codex", "claude-code", "claude", "chatgpt"}
+HOSTED_PLATFORMS = {"claude", "chatgpt"}
 PORTABLE_ARCHIVE_NAME = "chief-of-staff-lite-personalized.zip"
 BEGIN_MARKER = "<!-- CSL-CONFIG:BEGIN -->"
 END_MARKER = "<!-- CSL-CONFIG:END -->"
@@ -285,7 +286,7 @@ def platform_target(platform: str) -> Path:
     if platform == "codex":
         codex_home = Path(os.environ.get("CODEX_HOME", home / ".codex")).expanduser()
         return codex_home / "skills" / SKILL_NAME
-    if platform == "claude":
+    if platform == "claude-code":
         claude_home = Path(
             os.environ.get("CLAUDE_CONFIG_DIR", home / ".claude")
         ).expanduser()
@@ -435,7 +436,7 @@ def atomic_write(path: Path, content: str) -> None:
             temporary_path.unlink()
 
 
-def atomic_write_zip(path: Path, skill_text: str, agent_text: str) -> None:
+def atomic_write_zip(path: Path, skill_text: str, agent_text: str | None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(
         prefix=f".{path.name}.", dir=path.parent
@@ -447,7 +448,8 @@ def atomic_write_zip(path: Path, skill_text: str, agent_text: str) -> None:
             temporary_path, "w", compression=zipfile.ZIP_DEFLATED
         ) as archive:
             archive.writestr(f"{SKILL_NAME}/SKILL.md", skill_text)
-            archive.writestr(f"{SKILL_NAME}/agents/openai.yaml", agent_text)
+            if agent_text is not None:
+                archive.writestr(f"{SKILL_NAME}/agents/openai.yaml", agent_text)
         os.chmod(temporary_path, 0o644)
         os.replace(temporary_path, path)
     finally:
@@ -491,14 +493,16 @@ def main() -> int:
         raw_config = json.loads(config_path.read_text(encoding="utf-8"))
         config = validate_config(raw_config)
 
-        if args.platform == "chatgpt":
+        if args.platform in HOSTED_PLATFORMS:
             archive_path = validate_export_path()
             current_skill = ""
             base_skill = TEMPLATE_PATH.read_text(encoding="utf-8")
             proposed_skill = replace_config_block(base_skill, render_config_block(config))
             skill_path = Path(SKILL_NAME) / "SKILL.md"
             agent_path = Path(SKILL_NAME) / "agents" / "openai.yaml"
-            agent_text: str | None = load_daily_agent_metadata()
+            agent_text: str | None = (
+                load_daily_agent_metadata() if args.platform == "chatgpt" else None
+            )
         else:
             target = validate_target(args.platform)
             current_skill, base_skill = load_base_skill(target)
@@ -507,7 +511,7 @@ def main() -> int:
             agent_path = target / "agents" / "openai.yaml"
             agent_text = (
                 None
-                if args.platform == "claude" or agent_path.exists()
+                if args.platform == "claude-code" or agent_path.exists()
                 else load_daily_agent_metadata()
             )
             archive_path = None
@@ -537,8 +541,6 @@ def main() -> int:
             )
 
         if archive_path is not None:
-            if agent_text is None:
-                raise ConfigError("The ChatGPT package is missing OpenAI interface metadata.")
             atomic_write_zip(archive_path, proposed_skill, agent_text)
         else:
             if agent_text is not None:
