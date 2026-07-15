@@ -19,6 +19,16 @@ Guide a nontechnical CEO through a one-time setup, preview the exact personalize
 - Do not edit any skill manually. Use the bundled configuration script, which can write only the designated Chief of Staff Lite skill.
 - Preview first. Apply only the exact preview the CEO approves.
 
+## Verify the complete plugin
+
+Before asking setup questions, run this from the installer skill folder:
+
+```bash
+python3 scripts/configure_skill.py --check-bundle
+```
+
+Continue only when it prints `BUNDLE_OK`. The installer and daily skill are one plugin: the installer intentionally reads the daily skill's canonical OpenAI metadata instead of maintaining a duplicate. If the check fails, show its plain-language reinstall instruction and stop.
+
 ## Resolve the delivery mode
 
 Identify the current host from the session context. Do not ask the CEO to identify technical platform details.
@@ -116,6 +126,47 @@ Use this response shape:
 2. What situations should always be raised to you?
 3. How often do you want the brief, how short should it be, and what tone do you prefer?
 4. Should it include up to two draft follow-ups when useful? They will never be sent automatically.
+```
+
+## Completed setup example
+
+Use this fictional example to calibrate translation from ordinary CEO language into configuration and preview. Do not copy details that the CEO did not provide.
+
+**CEO answer:**
+
+> I'm Maya Chen, CEO of Acme Agency. I need to retain our largest client and hire two senior leaders. Pricing exceptions and executive ownership conflicts need me. Watch the board chair and our largest client. Raise client risk or strategic deadlines slipping. Give me a direct weekday brief under 500 words. Calendar appears available for today's executive and client meetings; my team will paste the leadership task update. Draft follow-ups are useful, but never send them.
+
+**Normalized configuration excerpt:**
+
+```json
+{
+  "ceo_name": "Maya Chen",
+  "company": "Acme Agency",
+  "strategic_priorities": ["Retain the largest client", "Hire two senior leaders"],
+  "ceo_only_decisions": ["Approve material pricing exceptions", "Resolve executive ownership conflicts"],
+  "priority_stakeholders": ["Board chair", "Largest client"],
+  "escalation_triggers": ["A top client is at risk", "A strategic deadline may slip"],
+  "brief_preference": "Weekdays, under 500 words, direct and decision-oriented",
+  "include_follow_up_drafts": true,
+  "sources": [
+    {"name": "Calendar", "scope": "Today's executive and client meetings", "access_mode": "connected", "usage": "Prepare outcomes and questions for consequential meetings"},
+    {"name": "Leadership task update", "scope": "Leadership priorities and overdue dependencies", "access_mode": "manual", "usage": "Use only the pasted leadership update"}
+  ]
+}
+```
+
+**Approval preview excerpt:**
+
+```markdown
+## Your Chief of Staff Lite setup
+
+**CEO:** Maya Chen, Acme Agency
+**Priorities:** Retain the largest client; hire two senior leaders
+**CEO-only decisions:** Material pricing exceptions; executive ownership conflicts
+**Sources:** Calendar — appears available — today's executive and client meetings; leadership task update — pasted update — leadership priorities and overdue dependencies
+**Escalate when:** A top client is at risk; a strategic deadline may slip
+**Brief style:** Weekdays, under 500 words, direct and decision-oriented
+**Follow-up drafts:** yes, never sent automatically
 ```
 
 ## Build and preview

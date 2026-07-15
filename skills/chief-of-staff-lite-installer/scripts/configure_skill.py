@@ -23,11 +23,23 @@ BEGIN_MARKER = "<!-- CSL-CONFIG:BEGIN -->"
 END_MARKER = "<!-- CSL-CONFIG:END -->"
 INSTALLER_ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE_PATH = INSTALLER_ROOT / "assets" / "chief-of-staff-lite.template.md"
-AGENT_YAML = """interface:
-  display_name: \"Chief of Staff Lite\"
-  short_description: \"Run your personalized daily CEO brief\"
-  default_prompt: \"Use $chief-of-staff-lite to run my daily CEO brief.\"
-"""
+DAILY_SKILL_ROOT = INSTALLER_ROOT.parent / SKILL_NAME
+DAILY_SKILL_PATH = DAILY_SKILL_ROOT / "SKILL.md"
+DAILY_AGENT_PATH = DAILY_SKILL_ROOT / "agents" / "openai.yaml"
+
+# The temporary interview payload is small JSON. This cap rejects accidental document
+# uploads while leaving ample room for the bounded CEO configuration schema.
+MAX_CONFIG_BYTES = 65_536
+# Individual business-context fields should stay concise enough to guide a daily brief.
+DEFAULT_TEXT_MAX_CHARS = 600
+MAX_CEO_NAME_CHARS = 120
+MAX_COMPANY_NAME_CHARS = 160
+# Product limits keep the daily brief focused and prevent setup from becoming a data dump.
+MAX_STRATEGIC_PRIORITIES = 5
+MAX_CEO_ONLY_DECISIONS = 6
+MAX_PRIORITY_STAKEHOLDERS = 12
+MAX_ESCALATION_TRIGGERS = 10
+MAX_SOURCES = 10
 
 CONFIG_KEYS = {
     "ceo_name",
@@ -85,12 +97,14 @@ def validate_config_path(path: Path) -> Path:
             "The configuration must be a temporary file under one of these locations: "
             f"{roots}."
         )
-    if resolved.stat().st_size > 65_536:
+    if resolved.stat().st_size > MAX_CONFIG_BYTES:
         raise ConfigError("The configuration is larger than the 64 KB safety limit.")
     return resolved
 
 
-def clean_text(value: Any, field: str, *, max_length: int = 600) -> str:
+def clean_text(
+    value: Any, field: str, *, max_length: int = DEFAULT_TEXT_MAX_CHARS
+) -> str:
     if not isinstance(value, str):
         raise ConfigError(f"'{field}' must be text.")
     text = " ".join(value.split()).strip()
@@ -119,7 +133,7 @@ def clean_list(
     field: str,
     *,
     minimum: int = 1,
-    maximum: int = 10,
+    maximum: int = MAX_SOURCES,
 ) -> list[str]:
     if not isinstance(value, list):
         raise ConfigError(f"'{field}' must be a list.")
@@ -145,8 +159,10 @@ def validate_config(raw: Any) -> dict[str, Any]:
         raise ConfigError("'include_follow_up_drafts' must be true or false.")
 
     sources = raw["sources"]
-    if not isinstance(sources, list) or not 1 <= len(sources) <= 10:
-        raise ConfigError("'sources' must contain between 1 and 10 sources.")
+    if not isinstance(sources, list) or not 1 <= len(sources) <= MAX_SOURCES:
+        raise ConfigError(
+            f"'sources' must contain between 1 and {MAX_SOURCES} sources."
+        )
 
     clean_sources: list[dict[str, str]] = []
     for index, source in enumerate(sources):
@@ -177,20 +193,32 @@ def validate_config(raw: Any) -> dict[str, Any]:
         )
 
     return {
-        "ceo_name": clean_text(raw["ceo_name"], "ceo_name", max_length=120),
-        "company": clean_text(raw["company"], "company", max_length=160),
+        "ceo_name": clean_text(
+            raw["ceo_name"], "ceo_name", max_length=MAX_CEO_NAME_CHARS
+        ),
+        "company": clean_text(
+            raw["company"], "company", max_length=MAX_COMPANY_NAME_CHARS
+        ),
         "ceo_mandate": clean_text(raw["ceo_mandate"], "ceo_mandate"),
         "strategic_priorities": clean_list(
-            raw["strategic_priorities"], "strategic_priorities", maximum=5
+            raw["strategic_priorities"],
+            "strategic_priorities",
+            maximum=MAX_STRATEGIC_PRIORITIES,
         ),
         "ceo_only_decisions": clean_list(
-            raw["ceo_only_decisions"], "ceo_only_decisions", maximum=6
+            raw["ceo_only_decisions"],
+            "ceo_only_decisions",
+            maximum=MAX_CEO_ONLY_DECISIONS,
         ),
         "priority_stakeholders": clean_list(
-            raw["priority_stakeholders"], "priority_stakeholders", maximum=12
+            raw["priority_stakeholders"],
+            "priority_stakeholders",
+            maximum=MAX_PRIORITY_STAKEHOLDERS,
         ),
         "escalation_triggers": clean_list(
-            raw["escalation_triggers"], "escalation_triggers", maximum=10
+            raw["escalation_triggers"],
+            "escalation_triggers",
+            maximum=MAX_ESCALATION_TRIGGERS,
         ),
         "brief_preference": clean_text(raw["brief_preference"], "brief_preference"),
         "include_follow_up_drafts": include_drafts,
@@ -321,6 +349,40 @@ def load_base_skill(target: Path) -> tuple[str, str]:
     return "", template
 
 
+def load_daily_agent_metadata() -> str:
+    """Read the canonical OpenAI interface metadata from the daily skill."""
+    return DAILY_AGENT_PATH.read_text(encoding="utf-8")
+
+
+def validate_plugin_bundle() -> None:
+    """Verify the installer and daily skill ship together as one plugin."""
+    required_files = {
+        "installer template": TEMPLATE_PATH,
+        "daily skill": DAILY_SKILL_PATH,
+        "daily OpenAI metadata": DAILY_AGENT_PATH,
+    }
+    missing = [label for label, path in required_files.items() if not path.is_file()]
+    if missing:
+        raise ConfigError(
+            "The Chief of Staff Lite plugin is incomplete. Missing: "
+            f"{', '.join(missing)}. Reinstall the complete plugin before setup."
+        )
+    daily_skill = DAILY_SKILL_PATH.read_text(encoding="utf-8")
+    if not re.search(r"^name:\s*chief-of-staff-lite\s*$", daily_skill, re.MULTILINE):
+        raise ConfigError(
+            "The bundled daily skill is not recognized as Chief of Staff Lite. "
+            "Reinstall the complete plugin before setup."
+        )
+    metadata = load_daily_agent_metadata()
+    required_metadata_fields = ("display_name:", "short_description:", "default_prompt:")
+    missing_fields = [field for field in required_metadata_fields if field not in metadata]
+    if missing_fields:
+        raise ConfigError(
+            "The bundled daily OpenAI metadata is incomplete. Missing fields: "
+            f"{', '.join(missing_fields)}. Reinstall the complete plugin before setup."
+        )
+
+
 def approval_hash(skill_text: str, agent_text: str | None) -> str:
     payload = skill_text + "\n\0AGENT\0\n" + (agent_text or "")
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
@@ -397,8 +459,13 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Preview or apply a bounded Chief of Staff Lite configuration."
     )
-    parser.add_argument("--platform", required=True, choices=sorted(PLATFORMS))
-    parser.add_argument("--config", required=True, type=Path)
+    parser.add_argument("--platform", choices=sorted(PLATFORMS))
+    parser.add_argument("--config", type=Path)
+    parser.add_argument(
+        "--check-bundle",
+        action="store_true",
+        help="Verify that the complete two-skill plugin is installed.",
+    )
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--approved-hash")
     parser.add_argument(
@@ -412,6 +479,14 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     try:
+        validate_plugin_bundle()
+        if args.check_bundle:
+            print("BUNDLE_OK: installer and daily skill are present.")
+            return 0
+        if args.platform is None or args.config is None:
+            raise ConfigError(
+                "--platform and --config are required unless --check-bundle is used."
+            )
         config_path = validate_config_path(args.config)
         raw_config = json.loads(config_path.read_text(encoding="utf-8"))
         config = validate_config(raw_config)
@@ -423,14 +498,18 @@ def main() -> int:
             proposed_skill = replace_config_block(base_skill, render_config_block(config))
             skill_path = Path(SKILL_NAME) / "SKILL.md"
             agent_path = Path(SKILL_NAME) / "agents" / "openai.yaml"
-            agent_text: str | None = AGENT_YAML
+            agent_text: str | None = load_daily_agent_metadata()
         else:
             target = validate_target(args.platform)
             current_skill, base_skill = load_base_skill(target)
             proposed_skill = replace_config_block(base_skill, render_config_block(config))
             skill_path = target / "SKILL.md"
             agent_path = target / "agents" / "openai.yaml"
-            agent_text = None if args.platform == "claude" or agent_path.exists() else AGENT_YAML
+            agent_text = (
+                None
+                if args.platform == "claude" or agent_path.exists()
+                else load_daily_agent_metadata()
+            )
             archive_path = None
         digest = approval_hash(proposed_skill, agent_text)
 
@@ -458,7 +537,9 @@ def main() -> int:
             )
 
         if archive_path is not None:
-            atomic_write_zip(archive_path, proposed_skill, AGENT_YAML)
+            if agent_text is None:
+                raise ConfigError("The ChatGPT package is missing OpenAI interface metadata.")
+            atomic_write_zip(archive_path, proposed_skill, agent_text)
         else:
             if agent_text is not None:
                 atomic_write(agent_path, agent_text)
