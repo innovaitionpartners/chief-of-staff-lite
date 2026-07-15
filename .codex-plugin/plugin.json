@@ -1,0 +1,22 @@
+{
+  "name": "chief-of-staff-lite",
+  "version": "0.1.0",
+  "description": "Set up and run a personalized, read-only daily CEO brief.",
+  "author": {
+    "name": "InnovAItion Partners",
+    "url": "https://github.com/innovaitionpartners"
+  },
+  "repository": "https://github.com/innovaitionpartners/chief-of-staff-lite",
+  "keywords": ["ceo", "chief-of-staff", "executive-brief", "productivity"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Chief of Staff Lite",
+    "shortDescription": "A personalized daily chief of staff for CEOs",
+    "longDescription": "Chief of Staff Lite guides a CEO through safe one-time personalization, then produces a concise daily brief focused on decisions, meetings, risks, and follow-through where CEO attention changes the outcome.",
+    "developerName": "InnovAItion Partners",
+    "category": "Productivity",
+    "capabilities": ["Interactive", "Read", "Write"],
+    "websiteURL": "https://github.com/innovaitionpartners/chief-of-staff-lite",
+    "defaultPrompt": "Set up my personalized Chief of Staff Lite."
+  }
+}

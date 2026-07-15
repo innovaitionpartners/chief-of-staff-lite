@@ -2,3 +2,10 @@ __pycache__/
 *.py[cod]
 .DS_Store
 process_notes.md
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+requirements.md
+evals/
+tests/
+docs/

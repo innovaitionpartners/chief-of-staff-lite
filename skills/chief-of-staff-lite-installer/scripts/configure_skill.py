@@ -13,14 +13,16 @@ import re
 import sys
 import tempfile
 from typing import Any
+import zipfile
 
 
 SKILL_NAME = "chief-of-staff-lite"
+PLATFORMS = {"codex", "claude", "chatgpt"}
+PORTABLE_ARCHIVE_NAME = "chief-of-staff-lite-personalized.zip"
 BEGIN_MARKER = "<!-- CSL-CONFIG:BEGIN -->"
 END_MARKER = "<!-- CSL-CONFIG:END -->"
 INSTALLER_ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE_PATH = INSTALLER_ROOT / "assets" / "chief-of-staff-lite.template.md"
-EXPECTED_TARGET = (INSTALLER_ROOT.parent / SKILL_NAME).resolve(strict=False)
 AGENT_YAML = """interface:
   display_name: \"Chief of Staff Lite\"
   short_description: \"Run your personalized daily CEO brief\"
@@ -250,16 +252,33 @@ def replace_config_block(skill_text: str, config_block: str) -> str:
     return before + config_block + after
 
 
-def validate_target(target_arg: Path) -> Path:
+def platform_target(platform: str) -> Path:
+    home = Path.home().resolve()
+    if platform == "codex":
+        codex_home = Path(os.environ.get("CODEX_HOME", home / ".codex")).expanduser()
+        return codex_home / "skills" / SKILL_NAME
+    if platform == "claude":
+        claude_home = Path(
+            os.environ.get("CLAUDE_CONFIG_DIR", home / ".claude")
+        ).expanduser()
+        return claude_home / "skills" / SKILL_NAME
+    raise ConfigError(f"'{platform}' does not use a local skill target.")
+
+
+def validate_target(platform: str) -> Path:
+    target_arg = platform_target(platform)
     if target_arg.name != SKILL_NAME:
         raise ConfigError(f"The target folder must be named '{SKILL_NAME}'.")
     if target_arg.exists() and target_arg.is_symlink():
         raise ConfigError("The target skill folder cannot be a symbolic link.")
+    if target_arg.parent.exists() and target_arg.parent.is_symlink():
+        raise ConfigError("The user skill directory cannot be a symbolic link.")
     target = target_arg.resolve(strict=False)
-    if target != EXPECTED_TARGET:
+    plugin_skills_root = INSTALLER_ROOT.parent.resolve()
+    if _is_within(target, plugin_skills_root):
         raise ConfigError(
-            "The target must be the Chief of Staff Lite folder beside this installer: "
-            f"{EXPECTED_TARGET}."
+            "The installer will not personalize a plugin-owned skill. Choose the correct "
+            "platform so it can use a user-owned skill directory."
         )
     skill_path = target / "SKILL.md"
     agent_path = target / "agents" / "openai.yaml"
@@ -271,6 +290,22 @@ def validate_target(target_arg: Path) -> Path:
             "It was not changed."
         )
     return target
+
+
+def validate_export_path() -> Path:
+    root_arg = Path(
+        os.environ.get("CSL_EXPORT_DIR", tempfile.gettempdir())
+    ).expanduser()
+    if root_arg.exists() and root_arg.is_symlink():
+        raise ConfigError("The portable export directory cannot be a symbolic link.")
+    root = root_arg.resolve(strict=False)
+    allowed_roots = {Path("/tmp").resolve(), Path(tempfile.gettempdir()).resolve()}
+    if not any(_is_within(root, allowed) for allowed in allowed_roots):
+        raise ConfigError("The portable package must be created in a temporary directory.")
+    archive = root / PORTABLE_ARCHIVE_NAME
+    if archive.exists() and archive.is_symlink():
+        raise ConfigError("The portable package cannot overwrite a symbolic link.")
+    return archive
 
 
 def load_base_skill(target: Path) -> tuple[str, str]:
@@ -338,11 +373,31 @@ def atomic_write(path: Path, content: str) -> None:
             temporary_path.unlink()
 
 
+def atomic_write_zip(path: Path, skill_text: str, agent_text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.", dir=path.parent
+    )
+    os.close(descriptor)
+    temporary_path = Path(temporary_name)
+    try:
+        with zipfile.ZipFile(
+            temporary_path, "w", compression=zipfile.ZIP_DEFLATED
+        ) as archive:
+            archive.writestr(f"{SKILL_NAME}/SKILL.md", skill_text)
+            archive.writestr(f"{SKILL_NAME}/agents/openai.yaml", agent_text)
+        os.chmod(temporary_path, 0o644)
+        os.replace(temporary_path, path)
+    finally:
+        if temporary_path.exists():
+            temporary_path.unlink()
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Preview or apply a bounded Chief of Staff Lite configuration."
     )
-    parser.add_argument("--target-dir", required=True, type=Path)
+    parser.add_argument("--platform", required=True, choices=sorted(PLATFORMS))
     parser.add_argument("--config", required=True, type=Path)
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--approved-hash")
@@ -357,16 +412,26 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     try:
-        target = validate_target(args.target_dir)
         config_path = validate_config_path(args.config)
         raw_config = json.loads(config_path.read_text(encoding="utf-8"))
         config = validate_config(raw_config)
 
-        current_skill, base_skill = load_base_skill(target)
-        proposed_skill = replace_config_block(base_skill, render_config_block(config))
-        skill_path = target / "SKILL.md"
-        agent_path = target / "agents" / "openai.yaml"
-        agent_text = None if agent_path.exists() else AGENT_YAML
+        if args.platform == "chatgpt":
+            archive_path = validate_export_path()
+            current_skill = ""
+            base_skill = TEMPLATE_PATH.read_text(encoding="utf-8")
+            proposed_skill = replace_config_block(base_skill, render_config_block(config))
+            skill_path = Path(SKILL_NAME) / "SKILL.md"
+            agent_path = Path(SKILL_NAME) / "agents" / "openai.yaml"
+            agent_text: str | None = AGENT_YAML
+        else:
+            target = validate_target(args.platform)
+            current_skill, base_skill = load_base_skill(target)
+            proposed_skill = replace_config_block(base_skill, render_config_block(config))
+            skill_path = target / "SKILL.md"
+            agent_path = target / "agents" / "openai.yaml"
+            agent_text = None if args.platform == "claude" or agent_path.exists() else AGENT_YAML
+            archive_path = None
         digest = approval_hash(proposed_skill, agent_text)
 
         if not args.apply:
@@ -378,6 +443,8 @@ def main() -> int:
                 agent_path,
                 digest,
             )
+            if archive_path is not None:
+                print(f"PACKAGE_PATH={archive_path}")
             return 0
 
         if not args.approved_hash:
@@ -390,12 +457,18 @@ def main() -> int:
                 "Run preview again and ask the CEO to approve the new version."
             )
 
-        if agent_text is not None:
-            atomic_write(agent_path, agent_text)
-        atomic_write(skill_path, proposed_skill)
+        if archive_path is not None:
+            atomic_write_zip(archive_path, proposed_skill, AGENT_YAML)
+        else:
+            if agent_text is not None:
+                atomic_write(agent_path, agent_text)
+            atomic_write(skill_path, proposed_skill)
         if args.cleanup_config:
             config_path.unlink()
-        print(f"INSTALLED: {skill_path}")
+        if archive_path is not None:
+            print(f"EXPORTED: {archive_path}")
+        else:
+            print(f"INSTALLED: {skill_path}")
         print(f"APPROVAL_HASH={digest}")
         if args.cleanup_config:
             print(f"REMOVED_TEMP_CONFIG: {config_path}")
