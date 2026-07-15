@@ -1,0 +1,4 @@
+interface:
+  display_name: "Chief of Staff Lite Installer"
+  short_description: "Personalize a CEO daily brief skill safely"
+  default_prompt: "Use $chief-of-staff-lite-installer to create my personalized Chief of Staff Lite skill."

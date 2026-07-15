@@ -1,0 +1,419 @@
+#!/usr/bin/env python3
+"""Preview or apply a bounded Chief of Staff Lite personalization."""
+
+from __future__ import annotations
+
+import argparse
+import difflib
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import sys
+import tempfile
+from typing import Any
+
+
+SKILL_NAME = "chief-of-staff-lite"
+BEGIN_MARKER = "<!-- CSL-CONFIG:BEGIN -->"
+END_MARKER = "<!-- CSL-CONFIG:END -->"
+INSTALLER_ROOT = Path(__file__).resolve().parent.parent
+TEMPLATE_PATH = INSTALLER_ROOT / "assets" / "chief-of-staff-lite.template.md"
+EXPECTED_TARGET = (INSTALLER_ROOT.parent / SKILL_NAME).resolve(strict=False)
+AGENT_YAML = """interface:
+  display_name: \"Chief of Staff Lite\"
+  short_description: \"Run your personalized daily CEO brief\"
+  default_prompt: \"Use $chief-of-staff-lite to run my daily CEO brief.\"
+"""
+
+CONFIG_KEYS = {
+    "ceo_name",
+    "company",
+    "ceo_mandate",
+    "strategic_priorities",
+    "ceo_only_decisions",
+    "priority_stakeholders",
+    "escalation_triggers",
+    "brief_preference",
+    "include_follow_up_drafts",
+    "sources",
+}
+SOURCE_KEYS = {"name", "scope", "access_mode", "usage"}
+ACCESS_MODES = {"connected", "manual", "unavailable"}
+SECRET_PATTERNS = (
+    re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----", re.IGNORECASE),
+    re.compile(
+        r"\b(password|passcode|api[_ -]?key|access[_ -]?token|private[_ -]?key)\s*[:=]\s*\S+",
+        re.IGNORECASE,
+    ),
+    re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]{12,}", re.IGNORECASE),
+    re.compile(r"\bsk-[A-Za-z0-9_-]{16,}\b"),
+    re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}\b"),
+    re.compile(r"\bAKIA[A-Z0-9]{16}\b"),
+    re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b", re.IGNORECASE),
+)
+INSTRUCTION_PATTERNS = (
+    re.compile(r"\bignore\s+(all|any|previous|prior|your)\s+instructions?\b", re.IGNORECASE),
+    re.compile(r"\b(system prompt|developer message)\b", re.IGNORECASE),
+    re.compile(r"\b(bypass|override)\s+(the\s+)?(rules?|safety|instructions?)\b", re.IGNORECASE),
+)
+
+
+class ConfigError(ValueError):
+    """A user-correctable configuration or safety error."""
+
+
+def _is_within(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+        return True
+    except ValueError:
+        return False
+
+
+def validate_config_path(path: Path) -> Path:
+    if path.is_symlink():
+        raise ConfigError("The temporary configuration cannot be a symbolic link.")
+    resolved = path.resolve(strict=True)
+    allowed_roots = {Path("/tmp").resolve(), Path(tempfile.gettempdir()).resolve()}
+    if not any(_is_within(resolved, root) for root in allowed_roots):
+        roots = ", ".join(sorted(str(root) for root in allowed_roots))
+        raise ConfigError(
+            "The configuration must be a temporary file under one of these locations: "
+            f"{roots}."
+        )
+    if resolved.stat().st_size > 65_536:
+        raise ConfigError("The configuration is larger than the 64 KB safety limit.")
+    return resolved
+
+
+def clean_text(value: Any, field: str, *, max_length: int = 600) -> str:
+    if not isinstance(value, str):
+        raise ConfigError(f"'{field}' must be text.")
+    text = " ".join(value.split()).strip()
+    if not text:
+        raise ConfigError(f"'{field}' cannot be blank.")
+    if len(text) > max_length:
+        raise ConfigError(f"'{field}' exceeds the {max_length}-character limit.")
+    if BEGIN_MARKER in text or END_MARKER in text:
+        raise ConfigError(f"'{field}' contains a reserved configuration marker.")
+    if any(pattern.search(text) for pattern in SECRET_PATTERNS):
+        raise ConfigError(
+            f"'{field}' appears to contain a credential or secret. Remove it before continuing."
+        )
+    if any(pattern.search(text) for pattern in INSTRUCTION_PATTERNS):
+        raise ConfigError(
+            f"'{field}' contains instruction-like text that is unsafe to embed in a skill. "
+            "Rewrite it as ordinary business context."
+        )
+    if any(ord(character) < 32 for character in text):
+        raise ConfigError(f"'{field}' contains unsupported control characters.")
+    return text
+
+
+def clean_list(
+    value: Any,
+    field: str,
+    *,
+    minimum: int = 1,
+    maximum: int = 10,
+) -> list[str]:
+    if not isinstance(value, list):
+        raise ConfigError(f"'{field}' must be a list.")
+    if not minimum <= len(value) <= maximum:
+        raise ConfigError(
+            f"'{field}' must contain between {minimum} and {maximum} items."
+        )
+    return [clean_text(item, f"{field}[{index}]") for index, item in enumerate(value)]
+
+
+def validate_config(raw: Any) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        raise ConfigError("The configuration must be a JSON object.")
+    unknown = set(raw) - CONFIG_KEYS
+    missing = CONFIG_KEYS - set(raw)
+    if unknown:
+        raise ConfigError(f"Unknown configuration keys: {', '.join(sorted(unknown))}.")
+    if missing:
+        raise ConfigError(f"Missing configuration keys: {', '.join(sorted(missing))}.")
+
+    include_drafts = raw["include_follow_up_drafts"]
+    if not isinstance(include_drafts, bool):
+        raise ConfigError("'include_follow_up_drafts' must be true or false.")
+
+    sources = raw["sources"]
+    if not isinstance(sources, list) or not 1 <= len(sources) <= 10:
+        raise ConfigError("'sources' must contain between 1 and 10 sources.")
+
+    clean_sources: list[dict[str, str]] = []
+    for index, source in enumerate(sources):
+        if not isinstance(source, dict):
+            raise ConfigError(f"'sources[{index}]' must be an object.")
+        unknown_source = set(source) - SOURCE_KEYS
+        missing_source = SOURCE_KEYS - set(source)
+        if unknown_source:
+            raise ConfigError(
+                f"Unknown keys in sources[{index}]: {', '.join(sorted(unknown_source))}."
+            )
+        if missing_source:
+            raise ConfigError(
+                f"Missing keys in sources[{index}]: {', '.join(sorted(missing_source))}."
+            )
+        access_mode = clean_text(source["access_mode"], f"sources[{index}].access_mode")
+        if access_mode not in ACCESS_MODES:
+            raise ConfigError(
+                f"sources[{index}].access_mode must be connected, manual, or unavailable."
+            )
+        clean_sources.append(
+            {
+                "name": clean_text(source["name"], f"sources[{index}].name"),
+                "scope": clean_text(source["scope"], f"sources[{index}].scope"),
+                "access_mode": access_mode,
+                "usage": clean_text(source["usage"], f"sources[{index}].usage"),
+            }
+        )
+
+    return {
+        "ceo_name": clean_text(raw["ceo_name"], "ceo_name", max_length=120),
+        "company": clean_text(raw["company"], "company", max_length=160),
+        "ceo_mandate": clean_text(raw["ceo_mandate"], "ceo_mandate"),
+        "strategic_priorities": clean_list(
+            raw["strategic_priorities"], "strategic_priorities", maximum=5
+        ),
+        "ceo_only_decisions": clean_list(
+            raw["ceo_only_decisions"], "ceo_only_decisions", maximum=6
+        ),
+        "priority_stakeholders": clean_list(
+            raw["priority_stakeholders"], "priority_stakeholders", maximum=12
+        ),
+        "escalation_triggers": clean_list(
+            raw["escalation_triggers"], "escalation_triggers", maximum=10
+        ),
+        "brief_preference": clean_text(raw["brief_preference"], "brief_preference"),
+        "include_follow_up_drafts": include_drafts,
+        "sources": clean_sources,
+    }
+
+
+def markdown_text(text: str) -> str:
+    return text.replace("|", r"\|")
+
+
+def bullet_lines(items: list[str]) -> str:
+    return "\n".join(f"  - {markdown_text(item)}" for item in items)
+
+
+def render_config_block(config: dict[str, Any]) -> str:
+    source_rows = "\n".join(
+        "| {name} | {scope} | {access_mode} | {usage} |".format(
+            **{key: markdown_text(value) for key, value in source.items()}
+        )
+        for source in config["sources"]
+    )
+    drafts = "yes" if config["include_follow_up_drafts"] else "no"
+    return f"""{BEGIN_MARKER}
+## CEO operating context
+
+**Configuration status:** active
+
+- **CEO:** {markdown_text(config['ceo_name'])}
+- **Company:** {markdown_text(config['company'])}
+- **CEO mandate:** {markdown_text(config['ceo_mandate'])}
+- **Strategic priorities:**
+{bullet_lines(config['strategic_priorities'])}
+- **CEO-only decisions or unblockers:**
+{bullet_lines(config['ceo_only_decisions'])}
+- **Priority stakeholders:**
+{bullet_lines(config['priority_stakeholders'])}
+- **Escalate when:**
+{bullet_lines(config['escalation_triggers'])}
+- **Brief preference:** {markdown_text(config['brief_preference'])}
+- **Include follow-up drafts:** {drafts}
+
+### Configured information sources
+
+| Source | Relevant scope | Access mode | How to use it |
+|---|---|---|---|
+{source_rows}
+{END_MARKER}"""
+
+
+def replace_config_block(skill_text: str, config_block: str) -> str:
+    if skill_text.count(BEGIN_MARKER) != 1 or skill_text.count(END_MARKER) != 1:
+        raise ConfigError(
+            "The target skill does not have exactly one recognized configuration block. "
+            "It was not changed."
+        )
+    before, remainder = skill_text.split(BEGIN_MARKER, 1)
+    _, after = remainder.split(END_MARKER, 1)
+    return before + config_block + after
+
+
+def validate_target(target_arg: Path) -> Path:
+    if target_arg.name != SKILL_NAME:
+        raise ConfigError(f"The target folder must be named '{SKILL_NAME}'.")
+    if target_arg.exists() and target_arg.is_symlink():
+        raise ConfigError("The target skill folder cannot be a symbolic link.")
+    target = target_arg.resolve(strict=False)
+    if target != EXPECTED_TARGET:
+        raise ConfigError(
+            "The target must be the Chief of Staff Lite folder beside this installer: "
+            f"{EXPECTED_TARGET}."
+        )
+    skill_path = target / "SKILL.md"
+    agent_path = target / "agents" / "openai.yaml"
+    if skill_path.is_symlink() or agent_path.is_symlink():
+        raise ConfigError("The installer will not overwrite symbolic-linked runtime files.")
+    if target.exists() and not skill_path.exists() and any(target.iterdir()):
+        raise ConfigError(
+            "The target folder contains files but no recognized Chief of Staff Lite SKILL.md. "
+            "It was not changed."
+        )
+    return target
+
+
+def load_base_skill(target: Path) -> tuple[str, str]:
+    skill_path = target / "SKILL.md"
+    if skill_path.exists():
+        current = skill_path.read_text(encoding="utf-8")
+        if not re.search(r"^name:\s*chief-of-staff-lite\s*$", current, re.MULTILINE):
+            raise ConfigError(
+                "The existing SKILL.md is not Chief of Staff Lite. It was not changed."
+            )
+        return current, current
+    template = TEMPLATE_PATH.read_text(encoding="utf-8")
+    return "", template
+
+
+def approval_hash(skill_text: str, agent_text: str | None) -> str:
+    payload = skill_text + "\n\0AGENT\0\n" + (agent_text or "")
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def print_preview(
+    current_skill: str,
+    proposed_skill: str,
+    skill_path: Path,
+    agent_text: str | None,
+    agent_path: Path,
+    digest: str,
+) -> None:
+    current_lines = current_skill.splitlines(keepends=True)
+    proposed_lines = proposed_skill.splitlines(keepends=True)
+    diff = difflib.unified_diff(
+        current_lines,
+        proposed_lines,
+        fromfile=str(skill_path) if current_skill else "/dev/null",
+        tofile=str(skill_path),
+    )
+    sys.stdout.writelines(diff)
+    if agent_text is not None:
+        agent_diff = difflib.unified_diff(
+            [],
+            agent_text.splitlines(keepends=True),
+            fromfile="/dev/null",
+            tofile=str(agent_path),
+        )
+        sys.stdout.writelines(agent_diff)
+    print(f"APPROVAL_HASH={digest}")
+    print("PREVIEW_ONLY: no files were written.")
+
+
+def atomic_write(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.", dir=path.parent, text=True
+    )
+    temporary_path = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temporary_path, 0o644)
+        os.replace(temporary_path, path)
+    finally:
+        if temporary_path.exists():
+            temporary_path.unlink()
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Preview or apply a bounded Chief of Staff Lite configuration."
+    )
+    parser.add_argument("--target-dir", required=True, type=Path)
+    parser.add_argument("--config", required=True, type=Path)
+    parser.add_argument("--apply", action="store_true")
+    parser.add_argument("--approved-hash")
+    parser.add_argument(
+        "--cleanup-config",
+        action="store_true",
+        help="Delete the validated temporary configuration after a successful apply.",
+    )
+    return parser.parse_args()
+
+
+def main() -> int:
+    args = parse_args()
+    try:
+        target = validate_target(args.target_dir)
+        config_path = validate_config_path(args.config)
+        raw_config = json.loads(config_path.read_text(encoding="utf-8"))
+        config = validate_config(raw_config)
+
+        current_skill, base_skill = load_base_skill(target)
+        proposed_skill = replace_config_block(base_skill, render_config_block(config))
+        skill_path = target / "SKILL.md"
+        agent_path = target / "agents" / "openai.yaml"
+        agent_text = None if agent_path.exists() else AGENT_YAML
+        digest = approval_hash(proposed_skill, agent_text)
+
+        if not args.apply:
+            print_preview(
+                current_skill,
+                proposed_skill,
+                skill_path,
+                agent_text,
+                agent_path,
+                digest,
+            )
+            return 0
+
+        if not args.approved_hash:
+            raise ConfigError("--apply requires --approved-hash from the latest preview.")
+        if not re.fullmatch(r"[0-9a-f]{64}", args.approved_hash):
+            raise ConfigError("The approved hash must be a 64-character SHA-256 value.")
+        if args.approved_hash != digest:
+            raise ConfigError(
+                "The approved hash does not match the current proposed skill. "
+                "Run preview again and ask the CEO to approve the new version."
+            )
+
+        if agent_text is not None:
+            atomic_write(agent_path, agent_text)
+        atomic_write(skill_path, proposed_skill)
+        if args.cleanup_config:
+            config_path.unlink()
+        print(f"INSTALLED: {skill_path}")
+        print(f"APPROVAL_HASH={digest}")
+        if args.cleanup_config:
+            print(f"REMOVED_TEMP_CONFIG: {config_path}")
+        return 0
+    except FileNotFoundError as error:
+        print(f"ERROR: Required file not found: {error.filename}", file=sys.stderr)
+        return 2
+    except json.JSONDecodeError as error:
+        print(
+            f"ERROR: The temporary configuration is not valid JSON: line {error.lineno}, "
+            f"column {error.colno}.",
+            file=sys.stderr,
+        )
+        return 2
+    except (ConfigError, OSError) as error:
+        print(f"ERROR: {error}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

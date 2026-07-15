@@ -1,0 +1,4 @@
+interface:
+  display_name: "Chief of Staff Lite"
+  short_description: "Run your personalized daily CEO brief"
+  default_prompt: "Use $chief-of-staff-lite to run my daily CEO brief."
