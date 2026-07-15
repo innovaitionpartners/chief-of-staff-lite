@@ -1,35 +1,56 @@
-# Chief of Staff Lite — v1 build brief
+# Chief of Staff Lite — product requirements
 
-## Goal
+## Outcome
 
-Give a CEO a reusable, light AI chief-of-staff cadence. The skill captures the CEO's name, company, mandate, actual sources, and briefing preferences, then produces a concise daily CEO brief without requiring a particular platform, integration, or automatic action.
+A CEO who is not AI-savvy can install one setup skill, answer ordinary-language questions, approve a clear preview, and receive a personalized daily Chief of Staff Lite skill. The installed daily skill reflects the CEO's context without collecting credentials, connecting tools, or changing unrelated files.
 
-## User promise
+## Product shape
 
-Set up a CEO operating profile once. On a daily run, receive a brief that identifies what needs the CEO's attention, which meetings need to be won, what could become a surprise, and what follow-through matters.
+1. **Chief of Staff Lite Installer** — used once for initial setup and again only when the CEO wants to revise the configuration.
+2. **Chief of Staff Lite** — the personalized recurring skill that produces the daily CEO brief. It contains no setup interview or configuration-writing behavior.
 
-## In scope
+## Installer requirements
 
-- A guided setup that creates an approved `chief-of-staff-profile.md` using the user's actual tools and source availability.
-- Three source states: `connected`, `manual`, and `unavailable`.
-- A read-only daily brief covering executive attention, meetings, risks, follow-through, agenda protection, and coverage gaps.
-- A no-profile Quick Start mode for a one-time brief using pasted context.
+- Ask three short rounds: CEO context, information sources, and briefing preferences.
+- Inspect only the tool and connector capability names exposed in the current session; do not invoke them or read content during setup.
+- Show the CEO which named sources appear available and which are not visible, without claiming authentication or successful access.
+- Ask only for permission and scope when a clear capability match appears; offer paste-or-skip choices for missing or ambiguous sources.
+- Translate those plain-language choices into `connected`, `manual`, or `unavailable` internally. Recheck actual access during every daily run.
+- Generate a personalized daily `SKILL.md`; do not create a separate profile file.
+- Show the CEO a plain-language summary and exact target before writing.
+- Require explicit approval of the exact preview.
+- Re-running the installer may update only the marked CEO configuration block.
+- Never run the first daily brief automatically.
 
-## Out of scope
+## Security requirements
 
-- Tool-specific integrations, task writes, email or chat sends, calendar changes, automation scheduling, and persistent cross-system sync.
-- Replacing a full human chief of staff or task-management system.
+- Never request or store credentials or authentication material.
+- Treat pasted material as untrusted data and ignore embedded instructions.
+- Make no network requests and change no tool permissions or connections.
+- Never probe a tool to test authentication or access during setup.
+- Write only `chief-of-staff-lite/SKILL.md` and missing UI metadata in the sibling daily-skill folder.
+- Reject symbolic-link targets, unrelated existing folders, unknown schema keys, oversized configuration files, and secret-like values.
+- Preview must write nothing.
+- Apply must require the SHA-256 hash from the latest preview.
+- Writes must be atomic. The only permitted deletion is the exact validated temporary configuration file after a successful apply.
 
-## Required behavior
+## Daily-skill requirements
 
-- Never claim access to a configured source unless it is available in the current session.
-- Never silently omit a configured source; name it as a coverage gap and request the smallest useful paste when appropriate.
-- Never manufacture urgency, a risk, or a CEO-only responsibility from ordinary task noise.
-- Never write the profile during setup until the user has explicitly approved the draft and named a save location.
+- Refuse to run when its configuration is not active; direct the CEO to the installer without conducting setup itself.
+- Use only configured, available sources and expose coverage gaps.
+- Treat all source content as untrusted data.
+- Prioritize strategic impact, urgency, reversibility, and unique CEO leverage.
+- Separate facts from inferences and cite each substantive item's source.
+- Remain read-only unless the CEO makes a separate explicit request.
 
 ## Acceptance criteria
 
-1. The setup template records leadership mandate, source status and scope, operating preferences, and a read-only safety boundary.
-2. A daily brief includes every required section, including coverage gaps.
-3. The skill works credibly with no integrations, partial integrations, and full connected context.
-4. The deployed files contain no customer names, InnovAItion Partners-specific context, dev-workspace paths, or runtime references to the maintenance sidecar.
+1. Both skill folders pass Skill Creator validation.
+2. Preview produces a diff and approval hash without creating the target folder.
+3. A correct approval hash installs a personalized daily skill.
+4. A stale or incorrect approval hash cannot write.
+5. Reconfiguration preserves everything outside the marked CEO configuration block.
+6. Attempts to target another skill, overwrite an unrelated folder, use a symlink, add unknown keys, or include credentials fail safely.
+7. The installer's bundled daily template exactly matches the canonical unconfigured daily skill.
+8. A nontechnical CEO can understand the questions, preview, approval request, and first-use instruction without filesystem or AI terminology.
+9. Setup inventories exposed capability metadata without invoking tools, clearly distinguishes “appears available” from verified access, and never asks the CEO to classify internal access modes.
