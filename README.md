@@ -180,15 +180,13 @@ The plugin has two runtime skills:
 skills/
 ├── chief-of-staff-lite-installer/
 │   ├── SKILL.md
-│   ├── agents/openai.yaml
 │   ├── assets/chief-of-staff-lite.template.md
 │   └── scripts/configure_skill.py
 └── chief-of-staff-lite/
-    ├── SKILL.md
-    └── agents/openai.yaml
+    └── SKILL.md
 ```
 
-The `agents/openai.yaml` files are interface metadata for Codex and ChatGPT, not autonomous agents. The installer template is the stable source used to generate each CEO's personalized daily skill.
+The installer template is the stable source used to generate each CEO's personalized daily skill.
 
 No app, MCP server, or required external integration ships with the plugin. The configuration engine uses only Python's standard library and applies strict schema, preview, approval-hash, path, symlink, secret-detection, and atomic-write safeguards.
 
