@@ -188,9 +188,7 @@ skills/
 
 The installer template is the stable source used to generate each CEO's personalized daily skill.
 
-No app, MCP server, or required external integration ships with the plugin. The configuration engine uses only Python's standard library and applies strict schema, preview, approval-hash, path, symlink, secret-detection, and atomic-write safeguards.
-
-The current build passes 16 deterministic installer and security tests, both Skill Creator validators, Codex and Claude plugin validation, security scanning, and Ultra Skill Optimizer review.
+The plugin does not connect accounts or require an external service. Before creating or updating your personalized skill, the installer shows exactly what it will change and waits for your approval. It refuses passwords, API keys, and other likely secrets, and it limits changes to the personalized skill location you approved.
 
 ## About
 
