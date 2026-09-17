@@ -123,6 +123,17 @@ def validate_config_path(path: Path) -> Path:
     return resolved
 
 
+def read_config_payload(args: argparse.Namespace) -> tuple[Any, Path | None]:
+    """Read config from the current invocation or a validated temporary file."""
+    if args.config_stdin:
+        payload = sys.stdin.buffer.read(MAX_CONFIG_BYTES + 1)
+        if len(payload) > MAX_CONFIG_BYTES:
+            raise ConfigError("The configuration is larger than the 64 KB safety limit.")
+        return json.loads(payload.decode("utf-8")), None
+    config_path = validate_config_path(args.config)
+    return json.loads(config_path.read_text(encoding="utf-8")), config_path
+
+
 def clean_text(
     value: Any, field: str, *, max_length: int = DEFAULT_TEXT_MAX_CHARS
 ) -> str:
@@ -325,13 +336,20 @@ def render_config_block(config: dict[str, Any]) -> str:
 {END_MARKER}"""
 
 
-def platform_approval_action(platform: str) -> tuple[str, str]:
+def platform_approval_action(platform: str, is_update: bool) -> tuple[str, str]:
     if platform in {"codex", "claude-code"}:
         return (
             "Create or update the user-owned Chief of Staff Lite skill shown by preview.",
             "Reply **Yes, install it** to approve this exact setup.",
         )
     if platform == "cowork":
+        if is_update:
+            return (
+                "Update your existing Chief of Staff Lite skill with this configuration. "
+                "Cowork will show a replacement `.plugin` package for you to review and install.",
+                "Reply **Yes, prepare the update** to approve this exact change. "
+                "Cowork will review and install the replacement package separately.",
+            )
         return (
             "Create a personalized `.plugin` package for Cowork to review and install separately.",
             "Reply **Yes, create the package** to approve this exact setup. You will review and install the resulting package separately.",
@@ -342,7 +360,13 @@ def platform_approval_action(platform: str) -> tuple[str, str]:
     )
 
 
-def render_approval_preview(config: dict[str, Any], platform: str) -> str:
+def render_approval_preview(
+    config: dict[str, Any],
+    platform: str,
+    *,
+    is_update: bool,
+    has_temporary_config: bool,
+) -> str:
     """Render the complete user-visible approval contract from validated config."""
     priorities = "; ".join(markdown_text(item) for item in config["strategic_priorities"])
     decisions = "; ".join(markdown_text(item) for item in config["ceo_only_decisions"])
@@ -362,7 +386,17 @@ def render_approval_preview(config: dict[str, Any], platform: str) -> str:
         for source in config["sources"]
     )
     drafts = "yes, never sent automatically" if config["include_follow_up_drafts"] else "no"
-    action, approval = platform_approval_action(platform)
+    action, approval = platform_approval_action(platform, is_update)
+    unchanged = (
+        "Your existing skill has not been changed yet."
+        if is_update
+        else "Nothing has been written or installed yet."
+    )
+    cleanup = (
+        "\n- Delete the temporary setup file after a successful install or package creation."
+        if has_temporary_config
+        else ""
+    )
     return f"""## Your Chief of Staff Lite setup
 
 **CEO:** {markdown_text(config['ceo_name'])}, {markdown_text(config['company'])}
@@ -376,14 +410,13 @@ def render_approval_preview(config: dict[str, Any], platform: str) -> str:
 **Brief style:** {markdown_text(config['brief_preference'])}
 **Follow-up drafts:** {drafts}
 
-Nothing has been written or installed yet.
+{unchanged}
 
 ### What will happen
 - {action}
 - Preserve the daily workflow and safety rules.
 - Store no passwords, tokens, or credentials.
-- Make no tool connections or external changes.
-- Delete the temporary setup file after a successful install or package creation.
+- Make no tool connections or external changes.{cleanup}
 
 {approval}"""
 
@@ -397,6 +430,16 @@ def replace_config_block(skill_text: str, config_block: str) -> str:
     before, remainder = skill_text.split(BEGIN_MARKER, 1)
     _, after = remainder.split(END_MARKER, 1)
     return before + config_block + after
+
+
+def has_active_config(skill_text: str) -> bool:
+    """Detect whether the recognized config block represents an existing setup."""
+    if BEGIN_MARKER not in skill_text or END_MARKER not in skill_text:
+        return False
+    block = skill_text.split(BEGIN_MARKER, 1)[1].split(END_MARKER, 1)[0]
+    return bool(
+        re.search(r"\*\*Configuration status:\*\*\s*active\b", block)
+    )
 
 
 def platform_target(platform: str) -> Path:
@@ -537,6 +580,8 @@ def print_preview(
     digest: str,
     config: dict[str, Any],
     platform: str,
+    is_update: bool,
+    has_temporary_config: bool,
 ) -> None:
     current_lines = current_skill.splitlines(keepends=True)
     proposed_lines = proposed_skill.splitlines(keepends=True)
@@ -548,7 +593,14 @@ def print_preview(
     )
     sys.stdout.writelines(diff)
     print("APPROVAL_PREVIEW_BEGIN")
-    print(render_approval_preview(config, platform))
+    print(
+        render_approval_preview(
+            config,
+            platform,
+            is_update=is_update,
+            has_temporary_config=has_temporary_config,
+        )
+    )
     print("APPROVAL_PREVIEW_END")
     print(f"APPROVAL_HASH={digest}")
     print("PREVIEW_ONLY: no files were written.")
@@ -641,7 +693,13 @@ def parse_args() -> argparse.Namespace:
         description="Preview or apply a bounded Chief of Staff Lite configuration."
     )
     parser.add_argument("--platform", choices=sorted(PLATFORMS))
-    parser.add_argument("--config", type=Path)
+    config_source = parser.add_mutually_exclusive_group()
+    config_source.add_argument("--config", type=Path)
+    config_source.add_argument(
+        "--config-stdin",
+        action="store_true",
+        help="Read the complete JSON configuration from this invocation's standard input.",
+    )
     parser.add_argument(
         "--check-bundle",
         action="store_true",
@@ -664,12 +722,14 @@ def main() -> int:
         if args.check_bundle:
             print("BUNDLE_OK: installer and daily skill are present.")
             return 0
-        if args.platform is None or args.config is None:
+        if args.platform is None or (args.config is None and not args.config_stdin):
             raise ConfigError(
-                "--platform and --config are required unless --check-bundle is used."
+                "--platform and either --config or --config-stdin are required unless "
+                "--check-bundle is used."
             )
-        config_path = validate_config_path(args.config)
-        raw_config = json.loads(config_path.read_text(encoding="utf-8"))
+        if args.cleanup_config and args.config_stdin:
+            raise ConfigError("--cleanup-config cannot be used with --config-stdin.")
+        raw_config, config_path = read_config_payload(args)
         config = validate_config(raw_config)
         candidates = review_candidates(config)
         print_review_candidates(candidates)
@@ -691,6 +751,7 @@ def main() -> int:
             proposed_skill = replace_config_block(base_skill, render_config_block(config))
             skill_path = target / "SKILL.md"
             archive_path = None
+        is_update = has_active_config(current_skill)
         destination = f"{args.platform}:{skill_path}:{archive_path or ''}"
         digest = approval_hash(proposed_skill, destination)
 
@@ -702,6 +763,8 @@ def main() -> int:
                 digest,
                 config,
                 args.platform,
+                is_update,
+                config_path is not None,
             )
             if archive_path is not None:
                 print(f"PACKAGE_PATH={archive_path}")
@@ -723,14 +786,14 @@ def main() -> int:
             atomic_write_zip(archive_path, proposed_skill)
         else:
             atomic_write(skill_path, proposed_skill)
-        if args.cleanup_config:
+        if args.cleanup_config and config_path is not None:
             config_path.unlink()
         if archive_path is not None:
             print(f"EXPORTED: {archive_path}")
         else:
             print(f"INSTALLED: {skill_path}")
         print(f"APPROVAL_HASH={digest}")
-        if args.cleanup_config:
+        if args.cleanup_config and config_path is not None:
             print(f"REMOVED_TEMP_CONFIG: {config_path}")
         return 0
     except FileNotFoundError as error:
@@ -738,7 +801,7 @@ def main() -> int:
         return 2
     except json.JSONDecodeError as error:
         print(
-            f"ERROR: The temporary configuration is not valid JSON: line {error.lineno}, "
+            f"ERROR: The configuration is not valid JSON: line {error.lineno}, "
             f"column {error.colno}.",
             file=sys.stderr,
         )
