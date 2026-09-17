@@ -6,7 +6,7 @@ Chief of Staff Lite organizes the work information available in your AI session 
 
 It is not a replacement for a human chief of staff. It does not have the judgment, relationships, organizational awareness, or lived context of someone working beside you. Think of it as a structured daily sweep that helps you review available signals more consistently.
 
-You do not need to know how to write prompts or configure AI tools. A guided installer adapts the sweep to your company, priorities, and preferences.
+You do not need to know how to write prompts or configure AI tools. A short, guided interview helps you clarify what matters, then adapts the sweep to your company, priorities, and preferences.
 
 ## Install once, then use your personalized copy
 
@@ -57,20 +57,22 @@ The format requires a source for every substantive item and labels reasoned conc
 
 Chief of Staff Lite comes with a separate installer. You use it once at the beginning and again only when you choose to revise your personal copy.
 
-The installer guides you through three short conversations.
+The installer guides you through three short conversations. It does not drop a long configuration form on you: it asks a few questions at a time, reflects back what it heard, and helps turn broad answers into useful priorities and working preferences.
 
 ### 1. About you as CEO
 
-It asks for:
+It helps you define:
 
 - your name and company;
 - what you are ultimately accountable for;
-- your current strategic priorities; and
+- the outcomes that would make the next 90 days successful, in priority order; and
 - decisions or roadblocks that genuinely require you.
+
+If you say something broad like “growth” or “team,” it asks one practical follow-up—such as what would be visibly different if that went well—rather than making you invent a perfect strategy statement.
 
 ### 2. Where useful information lives
 
-It asks which sources should inform your brief, such as:
+It works backward from those priorities and asks where the earliest useful signals would appear, such as:
 
 - calendar;
 - task or project system;
@@ -79,18 +81,20 @@ It asks which sources should inform your brief, such as:
 - meeting notes; and
 - important documents or leadership updates.
 
-You decide the scope. A source can be used through a capability already available in your AI session, supplied as a pasted update, or skipped and listed as a coverage gap.
+You decide the scope. It favors the few sources that provide a distinct CEO-level signal over scanning every system your company uses. A source can be used through a capability already available in your AI session, supplied as a pasted update, or skipped and listed as a coverage gap.
 
 The installer does not connect accounts, test logins, or ask for passwords and API keys.
 
 ### 3. How you want the brief to work
 
-It asks about:
+It helps you choose:
 
 - priority stakeholders and relationships;
 - situations that should always be escalated;
-- your preferred cadence, length, and tone; and
+- your preferred cadence, reading time, directness, and level of detail; and
 - whether useful follow-up drafts should be included.
+
+If you are not sure, it offers a concrete starting point—weekdays, a five-minute read, direct, most important item first—so you can react to something instead of designing the brief from scratch.
 
 The installer then shows a plain-language summary and the exact personalized skill it proposes to create. Nothing is installed until you approve that preview.
 
@@ -100,7 +104,7 @@ After downloading the complete Chief of Staff Lite plugin once and adding it to 
 
 > **Set up my Chief of Staff Lite.**
 
-Answer the three rounds in ordinary language. Bullets and short answers are fine.
+Answer the three rounds in ordinary language. Bullets, rough thoughts, and “I’m not sure” are fine; the installer will help sharpen them and show you what it understood.
 
 When the installer shows your setup, reply:
 

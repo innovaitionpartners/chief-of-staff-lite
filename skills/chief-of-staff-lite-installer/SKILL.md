@@ -1,11 +1,11 @@
 ---
 name: chief-of-staff-lite-installer
-description: Installs or packages a safely personalized Chief of Staff Lite skill for a CEO through a short, plain-language setup across ChatGPT, Codex, and Claude Code. Use when a CEO wants to install, set up, personalize, reconfigure, or update Chief of Staff Lite with their company, priorities, stakeholders, escalation rules, preferred briefing style, and actual information sources. Do not use for daily briefs or for configuring unrelated skills.
+description: Installs or packages a safely personalized Chief of Staff Lite skill for a CEO through a short, guided mini-interview across ChatGPT, Codex, and Claude Code. Use when a CEO wants to install, set up, personalize, reconfigure, or update Chief of Staff Lite with their company, priorities, stakeholders, escalation rules, preferred briefing style, and actual information sources. Do not use for daily briefs or for configuring unrelated skills.
 ---
 
 # Chief of Staff Lite Installer
 
-Guide a nontechnical CEO through a one-time setup, preview the exact personalized skill, and install or package it only after approval. Re-run this installer whenever the CEO wants to change the configuration.
+Guide a nontechnical CEO through a one-time mini-interview, preview the exact personalized skill, and install or package it only after approval. Re-run this installer whenever the CEO wants to change the configuration.
 
 ## Safety rules
 
@@ -27,7 +27,7 @@ Before asking setup questions, run this from the installer skill folder:
 python3 scripts/configure_skill.py --check-bundle
 ```
 
-Continue only when it prints `BUNDLE_OK`. The installer and daily skill are one plugin: the installer intentionally reads the daily skill's canonical OpenAI metadata instead of maintaining a duplicate. If the check fails, show its plain-language reinstall instruction and stop.
+Continue only when it prints `BUNDLE_OK`. The installer and daily skill are one plugin, and the bundled personalization template must exactly match the unconfigured daily skill. If the check fails, show its plain-language reinstall instruction and stop.
 
 ## Resolve the delivery mode
 
@@ -44,30 +44,52 @@ For local reconfiguration in Codex or Claude Code, read only the marked `CSL-CON
 
 ## Setup conversation
 
-Ask in three short rounds. Use context already provided; do not repeat questions the CEO has answered. Explain unfamiliar terms in ordinary language.
+Conduct a three-round mini-interview, not a static questionnaire. Ask no more than three questions in one message, use each answer to choose the next question, and explain unfamiliar terms in ordinary language. Use context already provided; never repeat a question the CEO has answered.
+
+Help the CEO turn broad themes into useful operating guidance:
+
+- ask for outcomes rather than accepting labels such as “growth,” “team,” or “product” on their own;
+- ask the CEO to rank priorities when everything sounds equally important;
+- use a concrete example or either/or choice when an abstract preference is hard to answer;
+- reflect back the interpretation after each round so the CEO can correct it; and
+- ask at most one targeted follow-up per round when an answer is too vague to configure safely.
+
+Keep momentum. Do not interrogate the CEO for metrics, dates, or detail they do not have. Reasonable shorthand is enough when it clearly distinguishes what matters, what requires the CEO, and what the brief should surface.
 
 If a personalized daily skill already exists, summarize what is already set and ask only what the CEO wants to change or what is missing. Do not restart the full interview unless the CEO asks for a complete review.
 
-### Round 1 — About the CEO
+### Round 1 — Define what matters
 
 Ask for:
 
 - name and company;
 - what the CEO is accountable for;
-- up to five current strategic priorities; and
-- decisions or unblockers that genuinely require the CEO.
+- the three to five outcomes that would make the next 90 days meaningfully successful, in priority order; and
+- decisions or roadblocks where progress genuinely stops without the CEO.
+
+If the CEO gives broad themes, ask one follow-up that makes them more operational. Good prompts include “What would be visibly different if that went well?” and “Which of those matters most if tradeoffs appear?” Do not manufacture targets, deadlines, or rankings.
 
 Use this response shape for a new setup:
 
 ```markdown
-## First, tell me about you
+## First, let's define what matters
 
-1. What is your name and company?
-2. In one or two sentences, what are you ultimately accountable for?
-3. What are the three to five priorities that matter most right now?
-4. Which decisions or roadblocks genuinely need you—not just your team—to resolve?
+1. What is your name and company, and what are you ultimately accountable for?
+2. Imagine the next 90 days go well. What three to five outcomes would make you say it was a successful quarter?
+3. Where does progress tend to stop until you decide, approve, or unblock something personally?
 
-Bullets are perfect. Short answers are fine.
+Put the outcomes in priority order if you can. Bullets and rough answers are perfect; I’ll help sharpen them.
+```
+
+After the answer, briefly reflect:
+
+```markdown
+Here’s what I’m hearing:
+- **Your mandate:** [plain-language interpretation]
+- **Priorities, in order:** [outcome 1]; [outcome 2]; [outcome 3]
+- **Only-you decisions or unblockers:** [concise list]
+
+[Ask one correction or clarification only if needed.] If that is broadly right, we’ll choose the signals that can tell your brief whether these priorities are moving or at risk.
 ```
 
 ### Round 2 — Where useful information lives
@@ -79,7 +101,7 @@ Before asking the CEO to classify access, perform a read-only capability preflig
 3. Describe a clear match as **appears available here**, not as connected, authenticated, or successfully readable. Describe an absent or ambiguous match as **not visible here**.
 4. If the platform does not expose a capability inventory, say that availability cannot be checked safely during setup. Treat each source as not visible rather than testing it.
 
-Then ask which sources should inform the brief, such as calendar, task system, email, chat, meeting notes, or documents. For each source, capture:
+Then work backward from the priorities instead of asking for an inventory of every system the company uses. Ask where the earliest useful evidence would appear if a configured priority, CEO-only decision, or key relationship were moving, blocked, or at risk. Likely sources include the calendar, task system, email, chat, meeting notes, documents, or leadership updates. For each source, capture:
 
 - its plain-language name;
 - the narrow scope that matters;
@@ -94,14 +116,16 @@ The access mode is setup guidance, not proof of authentication. The daily skill 
 Use this response shape:
 
 ```markdown
-## Next, where should your brief look for signals?
+## Next, let's choose the signals worth watching
 
 I checked only which tool names this AI session exposes. I did not open anything or test your accounts.
 
 **Appears available here:** [plain-language list, or “None I can confirm safely”]
 **Not visible here:** [CEO-named sources with no clear match, or “None”]
 
-For anything that appears available, tell me whether you want the brief to use it and which meetings, projects, channels, folders, or updates matter. For anything not visible, choose either:
+For each top priority, where would the earliest useful sign of progress, delay, or risk show up? Name only the meetings, projects, channels, folders, or leadership updates that are worth a CEO-level scan.
+
+For anything that appears available, tell me whether you want the brief to use it and the narrow scope that matters. For anything not visible, choose either:
 
 - **Paste an update when needed**, or
 - **Skip it for now and show the gap**.
@@ -109,25 +133,34 @@ For anything that appears available, tell me whether you want the brief to use i
 You never need to share a password, API key, or login code. This setup will not install or connect tools.
 ```
 
-### Round 3 — How the brief should work
+Reflect the selected sources by tying each one to its purpose: “Calendar for consequential meetings,” not merely “Calendar.” If the CEO names many sources, ask which two or three give the earliest or most reliable signal and configure the rest only when they have a distinct CEO-level use.
+
+### Round 3 — Set the working style
 
 Ask for:
 
 - priority stakeholders;
-- situations that should be escalated;
-- preferred cadence, length, and tone; and
+- situations that should always be escalated, even when the evidence is incomplete;
+- preferred cadence, reading time, directness, and level of detail; and
 - whether the brief may include up to two unsent follow-up drafts.
+
+When the CEO does not know their preferences, offer a concrete starting point rather than repeating the abstract question: “A common default is weekdays, a five-minute read, direct, most important item first, with routine work omitted.” Let the CEO accept or change it. Translate “tell me everything” into a short brief plus explicit coverage gaps; do not turn the daily brief into an inbox digest.
 
 Use this response shape:
 
 ```markdown
-## Last, how should your brief work?
+## Last, let's make the brief work the way you do
 
-1. Which people or relationships deserve special attention?
-2. What situations should always be raised to you?
-3. How often do you want the brief, how short should it be, and what tone do you prefer?
-4. Should it include up to two draft follow-ups when useful? They will never be sent automatically.
+1. Which people or relationships deserve special attention, and what situations should always reach you?
+2. Would you like the common starting point—weekdays, a five-minute read, direct, most important item first—or something different?
+3. Should it include up to two draft follow-ups when useful? They will never be sent automatically.
 ```
+
+Then reflect the complete working style and ask one practical check: “What would make this brief feel noisy or unhelpful?” Use the answer to refine the escalation triggers or brief preference without adding a new configuration key.
+
+## Interview completion gate
+
+Do not build the configuration until the CEO has confirmed or corrected the three round summaries. The confirmation may be informal, such as “yes,” “close enough,” or a correction followed by moving on; do not demand a separate formal approval after every round. The exact install approval remains a separate required step after the generated preview.
 
 ## Completed setup example
 

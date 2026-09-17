@@ -26,7 +26,6 @@ INSTALLER_ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE_PATH = INSTALLER_ROOT / "assets" / "chief-of-staff-lite.template.md"
 DAILY_SKILL_ROOT = INSTALLER_ROOT.parent / SKILL_NAME
 DAILY_SKILL_PATH = DAILY_SKILL_ROOT / "SKILL.md"
-DAILY_AGENT_PATH = DAILY_SKILL_ROOT / "agents" / "openai.yaml"
 
 # The temporary interview payload is small JSON. This cap rejects accidental document
 # uploads while leaving ample room for the bounded CEO configuration schema.
@@ -310,9 +309,8 @@ def validate_target(platform: str) -> Path:
             "platform so it can use a user-owned skill directory."
         )
     skill_path = target / "SKILL.md"
-    agent_path = target / "agents" / "openai.yaml"
-    if skill_path.is_symlink() or agent_path.is_symlink():
-        raise ConfigError("The installer will not overwrite symbolic-linked runtime files.")
+    if skill_path.is_symlink():
+        raise ConfigError("The installer will not overwrite a symbolic-linked SKILL.md.")
     if target.exists() and not skill_path.exists() and any(target.iterdir()):
         raise ConfigError(
             "The target folder contains files but no recognized Chief of Staff Lite SKILL.md. "
@@ -350,17 +348,11 @@ def load_base_skill(target: Path) -> tuple[str, str]:
     return "", template
 
 
-def load_daily_agent_metadata() -> str:
-    """Read the canonical OpenAI interface metadata from the daily skill."""
-    return DAILY_AGENT_PATH.read_text(encoding="utf-8")
-
-
 def validate_plugin_bundle() -> None:
     """Verify the installer and daily skill ship together as one plugin."""
     required_files = {
         "installer template": TEMPLATE_PATH,
         "daily skill": DAILY_SKILL_PATH,
-        "daily OpenAI metadata": DAILY_AGENT_PATH,
     }
     missing = [label for label, path in required_files.items() if not path.is_file()]
     if missing:
@@ -374,18 +366,15 @@ def validate_plugin_bundle() -> None:
             "The bundled daily skill is not recognized as Chief of Staff Lite. "
             "Reinstall the complete plugin before setup."
         )
-    metadata = load_daily_agent_metadata()
-    required_metadata_fields = ("display_name:", "short_description:", "default_prompt:")
-    missing_fields = [field for field in required_metadata_fields if field not in metadata]
-    if missing_fields:
+    if TEMPLATE_PATH.read_text(encoding="utf-8") != daily_skill:
         raise ConfigError(
-            "The bundled daily OpenAI metadata is incomplete. Missing fields: "
-            f"{', '.join(missing_fields)}. Reinstall the complete plugin before setup."
+            "The installer template does not match the bundled daily skill. "
+            "Reinstall the complete plugin before setup."
         )
 
 
-def approval_hash(skill_text: str, agent_text: str | None) -> str:
-    payload = skill_text + "\n\0AGENT\0\n" + (agent_text or "")
+def approval_hash(skill_text: str, destination: str) -> str:
+    payload = skill_text + "\n\0DESTINATION\0\n" + destination
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
@@ -393,8 +382,6 @@ def print_preview(
     current_skill: str,
     proposed_skill: str,
     skill_path: Path,
-    agent_text: str | None,
-    agent_path: Path,
     digest: str,
 ) -> None:
     current_lines = current_skill.splitlines(keepends=True)
@@ -406,14 +393,6 @@ def print_preview(
         tofile=str(skill_path),
     )
     sys.stdout.writelines(diff)
-    if agent_text is not None:
-        agent_diff = difflib.unified_diff(
-            [],
-            agent_text.splitlines(keepends=True),
-            fromfile="/dev/null",
-            tofile=str(agent_path),
-        )
-        sys.stdout.writelines(agent_diff)
     print(f"APPROVAL_HASH={digest}")
     print("PREVIEW_ONLY: no files were written.")
 
@@ -436,7 +415,7 @@ def atomic_write(path: Path, content: str) -> None:
             temporary_path.unlink()
 
 
-def atomic_write_zip(path: Path, skill_text: str, agent_text: str | None) -> None:
+def atomic_write_zip(path: Path, skill_text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(
         prefix=f".{path.name}.", dir=path.parent
@@ -448,8 +427,6 @@ def atomic_write_zip(path: Path, skill_text: str, agent_text: str | None) -> Non
             temporary_path, "w", compression=zipfile.ZIP_DEFLATED
         ) as archive:
             archive.writestr(f"{SKILL_NAME}/SKILL.md", skill_text)
-            if agent_text is not None:
-                archive.writestr(f"{SKILL_NAME}/agents/openai.yaml", agent_text)
         os.chmod(temporary_path, 0o644)
         os.replace(temporary_path, path)
     finally:
@@ -499,31 +476,20 @@ def main() -> int:
             base_skill = TEMPLATE_PATH.read_text(encoding="utf-8")
             proposed_skill = replace_config_block(base_skill, render_config_block(config))
             skill_path = Path(SKILL_NAME) / "SKILL.md"
-            agent_path = Path(SKILL_NAME) / "agents" / "openai.yaml"
-            agent_text: str | None = (
-                load_daily_agent_metadata() if args.platform == "chatgpt" else None
-            )
         else:
             target = validate_target(args.platform)
             current_skill, base_skill = load_base_skill(target)
             proposed_skill = replace_config_block(base_skill, render_config_block(config))
             skill_path = target / "SKILL.md"
-            agent_path = target / "agents" / "openai.yaml"
-            agent_text = (
-                None
-                if args.platform == "claude-code" or agent_path.exists()
-                else load_daily_agent_metadata()
-            )
             archive_path = None
-        digest = approval_hash(proposed_skill, agent_text)
+        destination = f"{args.platform}:{skill_path}:{archive_path or ''}"
+        digest = approval_hash(proposed_skill, destination)
 
         if not args.apply:
             print_preview(
                 current_skill,
                 proposed_skill,
                 skill_path,
-                agent_text,
-                agent_path,
                 digest,
             )
             if archive_path is not None:
@@ -541,10 +507,8 @@ def main() -> int:
             )
 
         if archive_path is not None:
-            atomic_write_zip(archive_path, proposed_skill, agent_text)
+            atomic_write_zip(archive_path, proposed_skill)
         else:
-            if agent_text is not None:
-                atomic_write(agent_path, agent_text)
             atomic_write(skill_path, proposed_skill)
         if args.cleanup_config:
             config_path.unlink()
