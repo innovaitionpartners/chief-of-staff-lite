@@ -267,6 +267,19 @@ python3 scripts/configure_skill.py --platform "<mode>" --config "<temporary-conf
 
 This command is preview-only. It prints the proposed changes and an `APPROVAL_HASH`; it does not write the skill.
 
+The Bash or tool result may be collapsed in Cowork and is not a user-visible approval preview. After the command succeeds, the very next assistant message must post the complete plain-language preview below in the conversation. Repeat every configuration value after validation even if the same information appeared in an earlier reflection. Never request approval with only “This all looks right,” “the preview is ready,” a tool card, a filename, or a reference to hidden command output.
+
+Before requesting approval, verify that the visible assistant message includes:
+
+- CEO and company;
+- priorities in order;
+- CEO-only decisions or tracked unblockers;
+- every included or skipped source in user-facing language, with its scope;
+- priority stakeholders and escalation triggers;
+- brief style and follow-up-draft preference;
+- the platform-appropriate action that approval will perform; and
+- an explicit statement that nothing has been written or installed yet.
+
 Present this response and wait:
 
 ```markdown
@@ -279,6 +292,8 @@ Present this response and wait:
 **Escalate when:** [concise list]
 **Brief style:** [preference]
 **Follow-up drafts:** [yes/no]
+
+Nothing has been written or installed yet.
 
 ### What will happen
 - [Codex or Claude Code: Create or update the exact user-owned `SKILL.md` path shown by preview.]
@@ -299,6 +314,7 @@ Use exactly one of these approval phrases:
 - **Regular Claude or ChatGPT:** “Reply **Yes, create the file** to approve this exact setup. You will install the resulting file separately.”
 
 Do not call package creation “installation.” Do not narrate temporary paths, output-path validation, approval hashes, or command retries to the CEO. Translate successful preview output into the plain-language summary above. If a safety check fails, explain the outcome without proposing an unvalidated shell copy or manual file move.
+Do not rely on Bash output, a tool card, or an earlier interview reflection to satisfy the preview requirement. Approval is invalid until the post-validation summary is visibly posted in the assistant's conversation message.
 
 If the CEO requests changes, update the JSON and run preview again. Discard the old approval hash.
 
