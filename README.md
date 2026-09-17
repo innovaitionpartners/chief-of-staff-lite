@@ -92,10 +92,12 @@ It helps you choose:
 
 - priority stakeholders and relationships;
 - situations that should always be escalated;
-- your preferred cadence, reading time, directness, and level of detail; and
+- your preferred reading time, directness, and level of detail; and
 - whether useful follow-up drafts should be included.
 
-If you are not sure, it offers a concrete starting point—weekdays, a five-minute read, direct, most important item first—so you can react to something instead of designing the brief from scratch.
+If you are not sure, it offers a concrete starting point—a five-minute read, direct, most important item first—so you can react to something instead of designing the brief from scratch.
+
+The skill configuration does not schedule itself. After installation, Cowork or ChatGPT Work can create a scheduled task for the brief through the platform's native review-and-confirm flow. That task's schedule—not the skill configuration—determines when the brief runs. You can also run the brief manually at any time.
 
 The installer then shows a plain-language summary and the exact personalized skill it proposes to create. Nothing is installed until you approve that preview.
 
