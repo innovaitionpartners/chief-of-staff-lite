@@ -17,15 +17,24 @@ import zipfile
 
 
 SKILL_NAME = "chief-of-staff-lite"
-PLATFORMS = {"codex", "claude-code", "claude", "chatgpt"}
-HOSTED_PLATFORMS = {"claude", "chatgpt"}
+PLATFORMS = {"codex", "claude-code", "claude", "cowork", "chatgpt"}
+HOSTED_PLATFORMS = {"claude", "cowork", "chatgpt"}
 PORTABLE_ARCHIVE_NAME = "chief-of-staff-lite-personalized.zip"
+COWORK_PLUGIN_NAME = "chief-of-staff-lite-personalized.plugin"
 BEGIN_MARKER = "<!-- CSL-CONFIG:BEGIN -->"
 END_MARKER = "<!-- CSL-CONFIG:END -->"
 INSTALLER_ROOT = Path(__file__).resolve().parent.parent
+PLUGIN_ROOT = INSTALLER_ROOT.parent.parent
 TEMPLATE_PATH = INSTALLER_ROOT / "assets" / "chief-of-staff-lite.template.md"
 DAILY_SKILL_ROOT = INSTALLER_ROOT.parent / SKILL_NAME
 DAILY_SKILL_PATH = DAILY_SKILL_ROOT / "SKILL.md"
+DAILY_SKILL_RELATIVE_PATH = Path("skills") / SKILL_NAME / "SKILL.md"
+TEMPLATE_RELATIVE_PATH = (
+    Path("skills")
+    / "chief-of-staff-lite-installer"
+    / "assets"
+    / "chief-of-staff-lite.template.md"
+)
 
 # The temporary interview payload is small JSON. This cap rejects accidental document
 # uploads while leaving ample room for the bounded CEO configuration schema.
@@ -319,17 +328,27 @@ def validate_target(platform: str) -> Path:
     return target
 
 
-def validate_export_path() -> Path:
+def validate_export_path(platform: str) -> Path:
     root_arg = Path(
         os.environ.get("CSL_EXPORT_DIR", tempfile.gettempdir())
     ).expanduser()
     if root_arg.exists() and root_arg.is_symlink():
         raise ConfigError("The portable export directory cannot be a symbolic link.")
     root = root_arg.resolve(strict=False)
-    allowed_roots = {Path("/tmp").resolve(), Path(tempfile.gettempdir()).resolve()}
+    allowed_roots = {
+        Path("/tmp").resolve(),
+        Path(tempfile.gettempdir()).resolve(),
+        Path("/mnt/data/outputs").resolve(),
+        Path("/mnt/outputs").resolve(),
+        Path("/mnt/user-data/outputs").resolve(),
+    }
     if not any(_is_within(root, allowed) for allowed in allowed_roots):
-        raise ConfigError("The portable package must be created in a temporary directory.")
-    archive = root / PORTABLE_ARCHIVE_NAME
+        raise ConfigError(
+            "The portable package must be created in a temporary directory or the "
+            "Cowork outputs directory."
+        )
+    package_name = COWORK_PLUGIN_NAME if platform == "cowork" else PORTABLE_ARCHIVE_NAME
+    archive = root / package_name
     if archive.exists() and archive.is_symlink():
         raise ConfigError("The portable package cannot overwrite a symbolic link.")
     return archive
@@ -434,6 +453,51 @@ def atomic_write_zip(path: Path, skill_text: str) -> None:
             temporary_path.unlink()
 
 
+def atomic_write_cowork_plugin(path: Path, skill_text: str) -> None:
+    """Package a personalized copy of the complete plugin for Cowork."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.", dir=path.parent
+    )
+    os.close(descriptor)
+    temporary_path = Path(temporary_name)
+    included_roots = (Path(".claude-plugin"), Path(".codex-plugin"), Path("skills"))
+    included_files = (Path("README.md"), Path("LICENSE"))
+    try:
+        with zipfile.ZipFile(
+            temporary_path, "w", compression=zipfile.ZIP_DEFLATED
+        ) as archive:
+            for relative_root in included_roots:
+                source_root = PLUGIN_ROOT / relative_root
+                if not source_root.is_dir():
+                    continue
+                for source_path in sorted(source_root.rglob("*")):
+                    if source_path.is_symlink():
+                        raise ConfigError(
+                            f"The plugin contains a symbolic link that cannot be packaged: "
+                            f"{source_path.relative_to(PLUGIN_ROOT)}"
+                        )
+                    if not source_path.is_file():
+                        continue
+                    relative_path = source_path.relative_to(PLUGIN_ROOT)
+                    if relative_path in {
+                        DAILY_SKILL_RELATIVE_PATH,
+                        TEMPLATE_RELATIVE_PATH,
+                    }:
+                        archive.writestr(str(relative_path), skill_text)
+                    else:
+                        archive.write(source_path, str(relative_path))
+            for relative_path in included_files:
+                source_path = PLUGIN_ROOT / relative_path
+                if source_path.is_file():
+                    archive.write(source_path, str(relative_path))
+        os.chmod(temporary_path, 0o644)
+        os.replace(temporary_path, path)
+    finally:
+        if temporary_path.exists():
+            temporary_path.unlink()
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Preview or apply a bounded Chief of Staff Lite configuration."
@@ -471,11 +535,16 @@ def main() -> int:
         config = validate_config(raw_config)
 
         if args.platform in HOSTED_PLATFORMS:
-            archive_path = validate_export_path()
-            current_skill = ""
-            base_skill = TEMPLATE_PATH.read_text(encoding="utf-8")
+            archive_path = validate_export_path(args.platform)
+            if args.platform == "cowork":
+                current_skill = DAILY_SKILL_PATH.read_text(encoding="utf-8")
+                base_skill = current_skill
+                skill_path = DAILY_SKILL_RELATIVE_PATH
+            else:
+                current_skill = ""
+                base_skill = TEMPLATE_PATH.read_text(encoding="utf-8")
+                skill_path = Path(SKILL_NAME) / "SKILL.md"
             proposed_skill = replace_config_block(base_skill, render_config_block(config))
-            skill_path = Path(SKILL_NAME) / "SKILL.md"
         else:
             target = validate_target(args.platform)
             current_skill, base_skill = load_base_skill(target)
@@ -506,7 +575,9 @@ def main() -> int:
                 "Run preview again and ask the CEO to approve the new version."
             )
 
-        if archive_path is not None:
+        if args.platform == "cowork":
+            atomic_write_cowork_plugin(archive_path, proposed_skill)
+        elif archive_path is not None:
             atomic_write_zip(archive_path, proposed_skill)
         else:
             atomic_write(skill_path, proposed_skill)
