@@ -50,6 +50,8 @@ Conduct a three-round mini-interview, not a static questionnaire. Ask no more th
 
 In Cowork, keep open-ended discovery conversational. Ask about mandate, outcomes, CEO-only decisions, stakeholders, and escalation context in ordinary prose so the CEO can answer naturally; do not force those answers through `AskUserQuestion` or its custom-answer path. Use `AskUserQuestion` only for bounded decisions with concise, mutually exclusive choices, such as reading time, directness, follow-up drafts, and per-source handling. The tool already supplies skip and custom-answer paths, so do not add “Other” or “None” options. If the tool is unavailable for a bounded decision, ask the same choice conversationally without mentioning the missing tool.
 
+A successful question-tool call is not proof that its controls rendered for the CEO. Treat only returned structured answers as a submitted response. If the next user message is ordinary chat that does not answer the choices—especially “ok?”, “what form?”, or “I don't see it”—switch immediately to the conversational version of the pending choices. Never tell the CEO to complete “the form above,” click Continue, or resubmit a control they cannot see.
+
 Help the CEO turn broad themes into useful operating guidance:
 
 - ask for outcomes rather than accepting labels such as “growth,” “team,” or “product” on their own;
@@ -143,16 +145,21 @@ Reflect the selected sources by tying each one to its purpose: “Calendar for c
 
 ### Round 3 — Set the working style
 
-Ask for:
+First ask conversationally for:
 
 - priority stakeholders;
 - situations that should always be escalated, even when the evidence is incomplete;
-- preferred reading time, directness, and level of detail; and
+- what would make the brief feel noisy or unhelpful.
+
+After the CEO answers, ask the bounded preferences:
+
+- preferred reading time;
+- directness and level of detail; and
 - whether the brief may include up to two unsent follow-up drafts.
 
 When the CEO does not know their preferences, offer a concrete starting point rather than repeating the abstract question: “A common default is a five-minute read, direct, most important item first, with routine work omitted.” Let the CEO accept or change it. Translate “tell me everything” into a short brief plus explicit coverage gaps; do not turn the daily brief into an inbox digest.
 
-In Cowork, use structured `AskUserQuestion` choices for these preference decisions. Keep each choice mutually exclusive, explain the practical effect in one sentence, and recommend the five-minute direct default without silently selecting it.
+In Cowork, use one structured `AskUserQuestion` call containing only those three bounded preference decisions. Do not mix stakeholders, escalation situations, or noise tolerance into the control. Keep each choice mutually exclusive, explain the practical effect in one sentence, and recommend the five-minute direct default without silently selecting it. If structured answers are not returned, ask the same three choices in chat immediately on the CEO's next non-answer.
 
 Do not store a run cadence, day, time, or timezone in the personalized skill. The skill controls what the brief contains and how it reads; a scheduled task controls when it runs. After the CEO installs the personalized skill or plugin, offer an optional scheduling step in Cowork or ChatGPT Work when native scheduling is available. Collect timing only inside that scheduling step, show the exact task instructions and schedule through the host's native review flow, and do not claim the task exists until the CEO confirms it and the host reports success. If scheduling is unavailable, explain how to run the brief manually without treating that as an installation failure.
 
@@ -161,12 +168,23 @@ Use this response shape:
 ```markdown
 ## Last, let's make the brief work the way you do
 
+Before we choose the format:
+
 1. Which people or relationships deserve special attention, and what situations should always reach you?
-2. Would you like the common starting point—a five-minute read, direct, most important item first—or something different?
-3. Should it include up to two draft follow-ups when useful? They will never be sent automatically.
+2. What would make this brief feel noisy or unhelpful?
 ```
 
-Then reflect the complete working style and ask one practical check: “What would make this brief feel noisy or unhelpful?” Use the answer to refine the escalation triggers or brief preference without adding a new configuration key.
+After the conversational answer, present the three bounded choices through the native control. If a conversational fallback is needed, use:
+
+```markdown
+Three quick format choices:
+
+1. **Reading time:** about 3 minutes, 5 minutes (recommended), or 10 minutes?
+2. **Style:** direct and decision-first (recommended), balanced, or more detailed?
+3. **Draft follow-ups:** include up to two when useful, or no drafts? They will never be sent automatically.
+```
+
+Then reflect the complete working style. Use the noise answer to refine the escalation triggers or brief preference without adding a new configuration key.
 
 ## Interview completion gate
 
