@@ -328,6 +328,23 @@ def validate_target(platform: str) -> Path:
     return target
 
 
+def is_cowork_session_outputs_root(path: Path) -> bool:
+    """Accept only the exact user-visible outputs mount inside a Cowork session."""
+    parts = path.parts
+    if (
+        len(parts) < 5
+        or parts[0] != "/"
+        or parts[1] != "sessions"
+        or not re.fullmatch(r"[A-Za-z0-9._-]+", parts[2])
+    ):
+        return False
+    return tuple(parts[3:]) in {
+        ("mnt", "outputs"),
+        ("mnt", "data", "outputs"),
+        ("mnt", "user-data", "outputs"),
+    }
+
+
 def validate_export_path(platform: str) -> Path:
     root_arg = Path(
         os.environ.get("CSL_EXPORT_DIR", tempfile.gettempdir())
@@ -342,7 +359,10 @@ def validate_export_path(platform: str) -> Path:
         Path("/mnt/outputs").resolve(),
         Path("/mnt/user-data/outputs").resolve(),
     }
-    if not any(_is_within(root, allowed) for allowed in allowed_roots):
+    allowed = any(_is_within(root, candidate) for candidate in allowed_roots)
+    if platform == "cowork":
+        allowed = allowed or is_cowork_session_outputs_root(root)
+    if not allowed:
         raise ConfigError(
             "The portable package must be created in a temporary directory or the "
             "Cowork outputs directory."

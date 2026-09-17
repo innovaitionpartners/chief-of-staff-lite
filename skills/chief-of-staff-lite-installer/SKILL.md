@@ -259,7 +259,7 @@ Create the temporary JSON configuration under `/tmp` or the system temporary dir
 
 Do not add keys. Do not place secrets or credentials in any value.
 
-Run from the installer skill folder, substituting the resolved `codex`, `claude-code`, `cowork`, `claude`, or `chatgpt` mode. In Cowork, set `CSL_EXPORT_DIR` to the user-visible outputs directory exposed by the session when available; otherwise use the system temporary directory and surface the emitted package explicitly.
+Run from the installer skill folder, substituting the resolved `codex`, `claude-code`, `cowork`, `claude`, or `chatgpt` mode. In Cowork, set `CSL_EXPORT_DIR` to the exact user-visible outputs directory exposed by the session when available; the script recognizes the standard session-mounted outputs paths. If the path is rejected, stop and report that the package could not be created safely. Never omit `CSL_EXPORT_DIR` and then copy the package manually as a workaround.
 
 ```bash
 python3 scripts/configure_skill.py --platform "<mode>" --config "<temporary-config.json>"
@@ -289,8 +289,16 @@ Present this response and wait:
 - Make no tool connections or external changes.
 - Delete the temporary setup file after a successful install.
 
-Reply **Yes, install it** to approve this exact setup, or tell me what to change.
+[Use the platform-appropriate approval phrase below], or tell me what to change.
 ```
+
+Use exactly one of these approval phrases:
+
+- **Codex or Claude Code:** “Reply **Yes, install it** to approve this exact setup.”
+- **Cowork:** “Reply **Yes, create the package** to approve this exact setup. You will review and install the resulting package separately.”
+- **Regular Claude or ChatGPT:** “Reply **Yes, create the file** to approve this exact setup. You will install the resulting file separately.”
+
+Do not call package creation “installation.” Do not narrate temporary paths, output-path validation, approval hashes, or command retries to the CEO. Translate successful preview output into the plain-language summary above. If a safety check fails, explain the outcome without proposing an unvalidated shell copy or manual file move.
 
 If the CEO requests changes, update the JSON and run preview again. Discard the old approval hash.
 
