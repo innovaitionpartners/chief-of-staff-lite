@@ -42,7 +42,7 @@ Identify the current host from the session context. Do not ask the CEO to identi
 
 If the host cannot be identified safely, use `chatgpt` so the result is a portable package rather than an uncertain filesystem write. Briefly tell the CEO: “I’ll prepare the version that you can install from a file.”
 
-For local reconfiguration in Codex or Claude Code, read only the marked `CSL-CONFIG` block from the platform's user-owned `chief-of-staff-lite` skill when it exists. Never read or modify the unconfigured daily skill inside this plugin. In Cowork, read the marked block from the mounted plugin and create a replacement personalized `.plugin` package; do not edit the mounted copy. For regular Claude or ChatGPT reconfiguration, use a personalized skill the CEO supplies; otherwise run a fresh setup and create a replacement ZIP for the CEO to review and install.
+For local reconfiguration in Codex or Claude Code, read only the marked `CSL-CONFIG` block from the platform's user-owned `chief-of-staff-lite` skill when it exists. Never read or modify the unconfigured daily skill inside this plugin. In Cowork, read the marked block from the mounted personalized plugin and update that skill's configuration. Because the mounted copy is read-only, deliver the update through a replacement personalized `.plugin` package for the CEO to review and install; describe the outcome as updating the existing skill, not creating a new setup. For regular Claude or ChatGPT reconfiguration, use a personalized skill the CEO supplies; otherwise run a fresh setup and create a replacement ZIP for the CEO to review and install.
 
 ## Setup conversation
 
@@ -119,7 +119,7 @@ Then work backward from the priorities instead of asking for an inventory of eve
 
 The access mode is setup guidance, not proof of authentication. The daily skill must verify actual availability each time it runs. Never ask the CEO to understand or choose the internal labels `connected`, `manual`, or `unavailable`.
 
-In Cowork, use one `AskUserQuestion` item per source, with no more than four sources in one tool call. For a clear capability match, offer **Use it here**, **Paste updates**, and **Skip for now**. For a source that is not visible, offer only **Paste updates** and **Skip for now**. Ask for narrow scope only after the CEO chooses to use or paste that source.
+In Cowork, use one `AskUserQuestion` item per source, with no more than four sources in one tool call. Each source is an independent include/paste/skip decision. Never put two source names into mutually exclusive options or ask the CEO to choose one source instead of another unless the CEO explicitly said only one may be used. Similar functions do not make sources substitutes: Asana and Notion, for example, may both be selected and given different scopes. For a clear capability match, offer **Use it here**, **Paste updates**, and **Skip for now**. For a source that is not visible, offer only **Paste updates** and **Skip for now**. Ask for narrow scope only after the CEO chooses to use or paste that source.
 
 Use this response shape:
 
@@ -141,7 +141,7 @@ For anything that appears available, tell me whether you want the brief to use i
 You never need to share a password, API key, or login code. This setup will not install or connect tools.
 ```
 
-Reflect the selected sources by tying each one to its purpose: “Calendar for consequential meetings,” not merely “Calendar.” If the CEO names many sources, ask which two or three give the earliest or most reliable signal and configure the rest only when they have a distinct CEO-level use.
+Reflect the selected sources by tying each one to its purpose: “Calendar for consequential meetings,” not merely “Calendar.” If the CEO names many sources, let the CEO make every independent source choice first. Then recommend the two or three earliest or most reliable signals and ask whether apparently redundant sources should remain, each with a distinct CEO-level use. Do not enforce that recommendation by removing or combining choices.
 
 ### Round 3 — Set the working style
 
@@ -264,8 +264,12 @@ Do not add keys. Do not place secrets or credentials in any value.
 
 Run from the installer skill folder, substituting the resolved `codex`, `claude-code`, `cowork`, `claude`, or `chatgpt` mode. In Cowork, set `CSL_EXPORT_DIR` to the exact user-visible outputs directory exposed by the session when available; the script recognizes the standard session-mounted outputs paths. If Cowork exposes no user-visible outputs directory, intentionally omit `CSL_EXPORT_DIR`: the script will use the system temporary directory and Cowork must surface the returned package through its native file-preview flow. If an exposed path is rejected, stop and report that the package could not be created safely. Never copy or move a temporary package manually as a workaround.
 
+Pass the configuration through standard input in the same Bash invocation that runs the preview. This binds the preview to the JSON supplied in that invocation and cannot reuse a stale temporary file. Do not write or reuse `/tmp/csl/config.json` or any other fixed config path. If the Bash invocation or JSON input fails, do not run preview against an earlier file and do not show an approval summary.
+
 ```bash
-python3 scripts/configure_skill.py --platform "<mode>" --config "<temporary-config.json>"
+python3 scripts/configure_skill.py --platform "<mode>" --config-stdin <<'CSL_CONFIG'
+<exact JSON configuration>
+CSL_CONFIG
 ```
 
 This command is preview-only. It prints the proposed changes, a complete approval summary between `APPROVAL_PREVIEW_BEGIN` and `APPROVAL_PREVIEW_END`, and an `APPROVAL_HASH`; it does not write the skill.
@@ -305,7 +309,8 @@ Nothing has been written or installed yet.
 
 ### What will happen
 - [Codex or Claude Code: Create or update the exact user-owned `SKILL.md` path shown by preview.]
-- [Cowork: Create the exact personalized `.plugin` package shown by preview for the CEO to inspect and accept.]
+- [New Cowork setup: Create the exact personalized `.plugin` package shown by preview for the CEO to inspect and accept.]
+- [Cowork reconfiguration: Update the existing Chief of Staff Lite skill; deliver that update as the exact replacement `.plugin` package shown by preview.]
 - [Regular Claude or ChatGPT: Create the exact temporary personalized ZIP path shown by preview.]
 - Preserve the daily workflow and safety rules.
 - Store no passwords, tokens, or credentials.
@@ -318,25 +323,26 @@ Nothing has been written or installed yet.
 Use exactly one of these approval phrases:
 
 - **Codex or Claude Code:** “Reply **Yes, install it** to approve this exact setup.”
-- **Cowork:** “Reply **Yes, create the package** to approve this exact setup. You will review and install the resulting package separately.”
+- **New Cowork setup:** “Reply **Yes, create the package** to approve this exact setup. You will review and install the resulting package separately.”
+- **Cowork reconfiguration:** “Reply **Yes, prepare the update** to approve this exact change. Cowork will review and install the replacement package separately.”
 - **Regular Claude or ChatGPT:** “Reply **Yes, create the file** to approve this exact setup. You will install the resulting file separately.”
 
 Do not call package creation “installation.” Do not narrate temporary paths, output-path validation, approval hashes, or command retries to the CEO. Translate successful preview output into the plain-language summary above. If a safety check fails, explain the outcome without proposing an unvalidated shell copy or manual file move.
 Do not rely on Bash output, a tool card, or an earlier interview reflection to satisfy the preview requirement. Approval is invalid until the post-validation summary is visibly posted in the assistant's conversation message.
 
-If the CEO requests changes, update the JSON and run preview again. Discard the old approval hash.
+If the CEO requests changes, rerun the stdin preview with the complete revised JSON. Discard the old approval hash.
 
 ## Apply the approved setup
 
 Only after the CEO explicitly approves, run:
 
 ```bash
-python3 scripts/configure_skill.py --platform "<mode>" --config "<temporary-config.json>" --apply --approved-hash "<APPROVAL_HASH>" --cleanup-config
+python3 scripts/configure_skill.py --platform "<mode>" --config-stdin --apply --approved-hash "<APPROVAL_HASH>" <<'CSL_CONFIG'
+<the exact JSON configuration that produced the approved preview>
+CSL_CONFIG
 ```
 
-The script refuses an approval hash that does not match the current proposed skill. Never bypass this check or edit the file another way.
-
-After success, confirm that the script removed the temporary configuration.
+The script refuses an approval hash that does not match the current proposed skill. Never bypass this check or edit the file another way. Standard-input mode creates no temporary configuration file to clean up.
 
 For Codex or Claude Code, respond:
 
@@ -350,7 +356,7 @@ Try: **“Run my daily CEO brief.”**
 Re-run Chief of Staff Lite Installer whenever your priorities, tools, stakeholders, or briefing preferences change.
 ```
 
-For Cowork, surface the exact `.plugin` package emitted by the script. Cowork renders it as a reviewable plugin preview; do not claim setup is installed until the CEO accepts it. Respond:
+For Cowork, surface the exact `.plugin` package emitted by the script. Cowork renders it as a reviewable plugin preview; do not claim setup or an update is installed until the CEO accepts it. For a new setup, respond:
 
 ```markdown
 ## Your personalized Chief of Staff Lite is ready
@@ -364,6 +370,18 @@ After Cowork confirms installation, try: **“Run my daily CEO brief.”**
 Then offer: **“Would you like me to schedule this brief?”** If the CEO says yes, use Cowork's native scheduling flow (including `/schedule` when that is the exposed control) to propose the task instructions, recurrence, time, and timezone for explicit confirmation. Do not write those values into the skill configuration.
 
 Re-run **“Update my Chief of Staff Lite setup”** whenever your priorities, sources, stakeholders, or briefing preferences change.
+```
+
+For Cowork reconfiguration, describe the result as an update to the existing skill while making the replacement-package step explicit:
+
+```markdown
+## Your Chief of Staff Lite update is ready
+
+I prepared the update to your existing Chief of Staff Lite skill: `[exact package filename]`.
+
+Review the package preview, then use its install button to replace your current personalized version with this update.
+
+After Cowork confirms installation, your existing Chief of Staff Lite workflow will use the revised configuration.
 ```
 
 For regular Claude outside Cowork, surface the exact ZIP emitted by the script. Do not stop after creating it: guide the CEO through installing the personalized skill with this response:
