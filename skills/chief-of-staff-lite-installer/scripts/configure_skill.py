@@ -17,16 +17,24 @@ import zipfile
 
 
 SKILL_NAME = "chief-of-staff-lite"
-PLATFORMS = {"codex", "claude-code", "claude", "chatgpt"}
-HOSTED_PLATFORMS = {"claude", "chatgpt"}
+PLATFORMS = {"codex", "claude-code", "claude", "cowork", "chatgpt"}
+HOSTED_PLATFORMS = {"claude", "cowork", "chatgpt"}
 PORTABLE_ARCHIVE_NAME = "chief-of-staff-lite-personalized.zip"
+COWORK_PLUGIN_NAME = "chief-of-staff-lite-personalized.plugin"
 BEGIN_MARKER = "<!-- CSL-CONFIG:BEGIN -->"
 END_MARKER = "<!-- CSL-CONFIG:END -->"
 INSTALLER_ROOT = Path(__file__).resolve().parent.parent
+PLUGIN_ROOT = INSTALLER_ROOT.parent.parent
 TEMPLATE_PATH = INSTALLER_ROOT / "assets" / "chief-of-staff-lite.template.md"
 DAILY_SKILL_ROOT = INSTALLER_ROOT.parent / SKILL_NAME
 DAILY_SKILL_PATH = DAILY_SKILL_ROOT / "SKILL.md"
-DAILY_AGENT_PATH = DAILY_SKILL_ROOT / "agents" / "openai.yaml"
+DAILY_SKILL_RELATIVE_PATH = Path("skills") / SKILL_NAME / "SKILL.md"
+TEMPLATE_RELATIVE_PATH = (
+    Path("skills")
+    / "chief-of-staff-lite-installer"
+    / "assets"
+    / "chief-of-staff-lite.template.md"
+)
 
 # The temporary interview payload is small JSON. This cap rejects accidental document
 # uploads while leaving ample room for the bounded CEO configuration schema.
@@ -310,9 +318,8 @@ def validate_target(platform: str) -> Path:
             "platform so it can use a user-owned skill directory."
         )
     skill_path = target / "SKILL.md"
-    agent_path = target / "agents" / "openai.yaml"
-    if skill_path.is_symlink() or agent_path.is_symlink():
-        raise ConfigError("The installer will not overwrite symbolic-linked runtime files.")
+    if skill_path.is_symlink():
+        raise ConfigError("The installer will not overwrite a symbolic-linked SKILL.md.")
     if target.exists() and not skill_path.exists() and any(target.iterdir()):
         raise ConfigError(
             "The target folder contains files but no recognized Chief of Staff Lite SKILL.md. "
@@ -321,17 +328,27 @@ def validate_target(platform: str) -> Path:
     return target
 
 
-def validate_export_path() -> Path:
+def validate_export_path(platform: str) -> Path:
     root_arg = Path(
         os.environ.get("CSL_EXPORT_DIR", tempfile.gettempdir())
     ).expanduser()
     if root_arg.exists() and root_arg.is_symlink():
         raise ConfigError("The portable export directory cannot be a symbolic link.")
     root = root_arg.resolve(strict=False)
-    allowed_roots = {Path("/tmp").resolve(), Path(tempfile.gettempdir()).resolve()}
+    allowed_roots = {
+        Path("/tmp").resolve(),
+        Path(tempfile.gettempdir()).resolve(),
+        Path("/mnt/data/outputs").resolve(),
+        Path("/mnt/outputs").resolve(),
+        Path("/mnt/user-data/outputs").resolve(),
+    }
     if not any(_is_within(root, allowed) for allowed in allowed_roots):
-        raise ConfigError("The portable package must be created in a temporary directory.")
-    archive = root / PORTABLE_ARCHIVE_NAME
+        raise ConfigError(
+            "The portable package must be created in a temporary directory or the "
+            "Cowork outputs directory."
+        )
+    package_name = COWORK_PLUGIN_NAME if platform == "cowork" else PORTABLE_ARCHIVE_NAME
+    archive = root / package_name
     if archive.exists() and archive.is_symlink():
         raise ConfigError("The portable package cannot overwrite a symbolic link.")
     return archive
@@ -350,17 +367,11 @@ def load_base_skill(target: Path) -> tuple[str, str]:
     return "", template
 
 
-def load_daily_agent_metadata() -> str:
-    """Read the canonical OpenAI interface metadata from the daily skill."""
-    return DAILY_AGENT_PATH.read_text(encoding="utf-8")
-
-
 def validate_plugin_bundle() -> None:
     """Verify the installer and daily skill ship together as one plugin."""
     required_files = {
         "installer template": TEMPLATE_PATH,
         "daily skill": DAILY_SKILL_PATH,
-        "daily OpenAI metadata": DAILY_AGENT_PATH,
     }
     missing = [label for label, path in required_files.items() if not path.is_file()]
     if missing:
@@ -374,18 +385,15 @@ def validate_plugin_bundle() -> None:
             "The bundled daily skill is not recognized as Chief of Staff Lite. "
             "Reinstall the complete plugin before setup."
         )
-    metadata = load_daily_agent_metadata()
-    required_metadata_fields = ("display_name:", "short_description:", "default_prompt:")
-    missing_fields = [field for field in required_metadata_fields if field not in metadata]
-    if missing_fields:
+    if TEMPLATE_PATH.read_text(encoding="utf-8") != daily_skill:
         raise ConfigError(
-            "The bundled daily OpenAI metadata is incomplete. Missing fields: "
-            f"{', '.join(missing_fields)}. Reinstall the complete plugin before setup."
+            "The installer template does not match the bundled daily skill. "
+            "Reinstall the complete plugin before setup."
         )
 
 
-def approval_hash(skill_text: str, agent_text: str | None) -> str:
-    payload = skill_text + "\n\0AGENT\0\n" + (agent_text or "")
+def approval_hash(skill_text: str, destination: str) -> str:
+    payload = skill_text + "\n\0DESTINATION\0\n" + destination
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
@@ -393,8 +401,6 @@ def print_preview(
     current_skill: str,
     proposed_skill: str,
     skill_path: Path,
-    agent_text: str | None,
-    agent_path: Path,
     digest: str,
 ) -> None:
     current_lines = current_skill.splitlines(keepends=True)
@@ -406,14 +412,6 @@ def print_preview(
         tofile=str(skill_path),
     )
     sys.stdout.writelines(diff)
-    if agent_text is not None:
-        agent_diff = difflib.unified_diff(
-            [],
-            agent_text.splitlines(keepends=True),
-            fromfile="/dev/null",
-            tofile=str(agent_path),
-        )
-        sys.stdout.writelines(agent_diff)
     print(f"APPROVAL_HASH={digest}")
     print("PREVIEW_ONLY: no files were written.")
 
@@ -436,7 +434,7 @@ def atomic_write(path: Path, content: str) -> None:
             temporary_path.unlink()
 
 
-def atomic_write_zip(path: Path, skill_text: str, agent_text: str | None) -> None:
+def atomic_write_zip(path: Path, skill_text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(
         prefix=f".{path.name}.", dir=path.parent
@@ -448,8 +446,51 @@ def atomic_write_zip(path: Path, skill_text: str, agent_text: str | None) -> Non
             temporary_path, "w", compression=zipfile.ZIP_DEFLATED
         ) as archive:
             archive.writestr(f"{SKILL_NAME}/SKILL.md", skill_text)
-            if agent_text is not None:
-                archive.writestr(f"{SKILL_NAME}/agents/openai.yaml", agent_text)
+        os.chmod(temporary_path, 0o644)
+        os.replace(temporary_path, path)
+    finally:
+        if temporary_path.exists():
+            temporary_path.unlink()
+
+
+def atomic_write_cowork_plugin(path: Path, skill_text: str) -> None:
+    """Package a personalized copy of the complete plugin for Cowork."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.", dir=path.parent
+    )
+    os.close(descriptor)
+    temporary_path = Path(temporary_name)
+    included_roots = (Path(".claude-plugin"), Path(".codex-plugin"), Path("skills"))
+    included_files = (Path("README.md"), Path("LICENSE"))
+    try:
+        with zipfile.ZipFile(
+            temporary_path, "w", compression=zipfile.ZIP_DEFLATED
+        ) as archive:
+            for relative_root in included_roots:
+                source_root = PLUGIN_ROOT / relative_root
+                if not source_root.is_dir():
+                    continue
+                for source_path in sorted(source_root.rglob("*")):
+                    if source_path.is_symlink():
+                        raise ConfigError(
+                            f"The plugin contains a symbolic link that cannot be packaged: "
+                            f"{source_path.relative_to(PLUGIN_ROOT)}"
+                        )
+                    if not source_path.is_file():
+                        continue
+                    relative_path = source_path.relative_to(PLUGIN_ROOT)
+                    if relative_path in {
+                        DAILY_SKILL_RELATIVE_PATH,
+                        TEMPLATE_RELATIVE_PATH,
+                    }:
+                        archive.writestr(str(relative_path), skill_text)
+                    else:
+                        archive.write(source_path, str(relative_path))
+            for relative_path in included_files:
+                source_path = PLUGIN_ROOT / relative_path
+                if source_path.is_file():
+                    archive.write(source_path, str(relative_path))
         os.chmod(temporary_path, 0o644)
         os.replace(temporary_path, path)
     finally:
@@ -494,36 +535,30 @@ def main() -> int:
         config = validate_config(raw_config)
 
         if args.platform in HOSTED_PLATFORMS:
-            archive_path = validate_export_path()
-            current_skill = ""
-            base_skill = TEMPLATE_PATH.read_text(encoding="utf-8")
+            archive_path = validate_export_path(args.platform)
+            if args.platform == "cowork":
+                current_skill = DAILY_SKILL_PATH.read_text(encoding="utf-8")
+                base_skill = current_skill
+                skill_path = DAILY_SKILL_RELATIVE_PATH
+            else:
+                current_skill = ""
+                base_skill = TEMPLATE_PATH.read_text(encoding="utf-8")
+                skill_path = Path(SKILL_NAME) / "SKILL.md"
             proposed_skill = replace_config_block(base_skill, render_config_block(config))
-            skill_path = Path(SKILL_NAME) / "SKILL.md"
-            agent_path = Path(SKILL_NAME) / "agents" / "openai.yaml"
-            agent_text: str | None = (
-                load_daily_agent_metadata() if args.platform == "chatgpt" else None
-            )
         else:
             target = validate_target(args.platform)
             current_skill, base_skill = load_base_skill(target)
             proposed_skill = replace_config_block(base_skill, render_config_block(config))
             skill_path = target / "SKILL.md"
-            agent_path = target / "agents" / "openai.yaml"
-            agent_text = (
-                None
-                if args.platform == "claude-code" or agent_path.exists()
-                else load_daily_agent_metadata()
-            )
             archive_path = None
-        digest = approval_hash(proposed_skill, agent_text)
+        destination = f"{args.platform}:{skill_path}:{archive_path or ''}"
+        digest = approval_hash(proposed_skill, destination)
 
         if not args.apply:
             print_preview(
                 current_skill,
                 proposed_skill,
                 skill_path,
-                agent_text,
-                agent_path,
                 digest,
             )
             if archive_path is not None:
@@ -540,11 +575,11 @@ def main() -> int:
                 "Run preview again and ask the CEO to approve the new version."
             )
 
-        if archive_path is not None:
-            atomic_write_zip(archive_path, proposed_skill, agent_text)
+        if args.platform == "cowork":
+            atomic_write_cowork_plugin(archive_path, proposed_skill)
+        elif archive_path is not None:
+            atomic_write_zip(archive_path, proposed_skill)
         else:
-            if agent_text is not None:
-                atomic_write(agent_path, agent_text)
             atomic_write(skill_path, proposed_skill)
         if args.cleanup_config:
             config_path.unlink()

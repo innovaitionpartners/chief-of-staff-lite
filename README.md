@@ -6,18 +6,19 @@ Chief of Staff Lite organizes the work information available in your AI session 
 
 It is not a replacement for a human chief of staff. It does not have the judgment, relationships, organizational awareness, or lived context of someone working beside you. Think of it as a structured daily sweep that helps you review available signals more consistently.
 
-You do not need to know how to write prompts or configure AI tools. A guided installer adapts the sweep to your company, priorities, and preferences.
+You do not need to know how to write prompts or configure AI tools. A short, guided interview helps you clarify what matters, then adapts the sweep to your company, priorities, and preferences.
 
 ## Install once, then use your personalized copy
 
 Chief of Staff Lite is intended as a one-time download and setup.
 
-The complete download includes the installer and the unconfigured daily skill. When you finish setup, the installer creates a separate personalized copy that belongs to you. Your name, company, priorities, stakeholders, source preferences, and escalation rules live in that personal copy—not in the downloaded plugin.
+The complete download includes the installer and the unconfigured daily skill. When you finish setup, the installer creates a personalized copy that belongs to you. Your name, company, priorities, stakeholders, source preferences, and escalation rules live in that personal copy—not in the original download.
 
 From then on, you use the personalized daily skill. You do not need to download Chief of Staff Lite again for ordinary use.
 
 - **Codex and Claude Code:** The installer creates the personalized skill in your user-owned skills area. The original plugin remains separate.
-- **Regular Claude and Cowork:** The installer creates a personalized skill ZIP. Upload that ZIP under **Customize → Skills** to create the personal daily skill you will use going forward.
+- **Cowork:** The installer creates a personalized `.plugin` package. Cowork shows it as a reviewable package that you can accept directly, with no second skill upload.
+- **Regular Claude outside Cowork:** The installer creates a personalized skill ZIP. Upload that ZIP under **Customize → Skills** to create the personal daily skill you will use going forward.
 - **ChatGPT:** The installer creates a personalized ZIP. Installing that ZIP gives you the personal daily skill you will use going forward.
 
 Keep the installer available if you may want to revise your priorities or preferences later. Re-running the installer updates only the marked configuration inside your personal copy. It does not reset the rest of the skill.
@@ -57,20 +58,22 @@ The format requires a source for every substantive item and labels reasoned conc
 
 Chief of Staff Lite comes with a separate installer. You use it once at the beginning and again only when you choose to revise your personal copy.
 
-The installer guides you through three short conversations.
+The installer guides you through three short conversations. In Cowork, it uses Cowork’s native question controls for quick choices while leaving room for free-text answers. It asks a few questions at a time, reflects back what it heard, and helps turn broad answers into useful priorities and working preferences.
 
 ### 1. About you as CEO
 
-It asks for:
+It helps you define:
 
 - your name and company;
 - what you are ultimately accountable for;
-- your current strategic priorities; and
+- the outcomes that would make the next 90 days successful, in priority order; and
 - decisions or roadblocks that genuinely require you.
+
+If you say something broad like “growth” or “team,” it asks one practical follow-up—such as what would be visibly different if that went well—rather than making you invent a perfect strategy statement.
 
 ### 2. Where useful information lives
 
-It asks which sources should inform your brief, such as:
+It works backward from those priorities and asks where the earliest useful signals would appear, such as:
 
 - calendar;
 - task or project system;
@@ -79,18 +82,20 @@ It asks which sources should inform your brief, such as:
 - meeting notes; and
 - important documents or leadership updates.
 
-You decide the scope. A source can be used through a capability already available in your AI session, supplied as a pasted update, or skipped and listed as a coverage gap.
+You decide the scope. It favors the few sources that provide a distinct CEO-level signal over scanning every system your company uses. A source can be used through a capability already available in your AI session, supplied as a pasted update, or skipped and listed as a coverage gap.
 
 The installer does not connect accounts, test logins, or ask for passwords and API keys.
 
 ### 3. How you want the brief to work
 
-It asks about:
+It helps you choose:
 
 - priority stakeholders and relationships;
 - situations that should always be escalated;
-- your preferred cadence, length, and tone; and
+- your preferred cadence, reading time, directness, and level of detail; and
 - whether useful follow-up drafts should be included.
+
+If you are not sure, it offers a concrete starting point—weekdays, a five-minute read, direct, most important item first—so you can react to something instead of designing the brief from scratch.
 
 The installer then shows a plain-language summary and the exact personalized skill it proposes to create. Nothing is installed until you approve that preview.
 
@@ -100,7 +105,7 @@ After downloading the complete Chief of Staff Lite plugin once and adding it to 
 
 > **Set up my Chief of Staff Lite.**
 
-Answer the three rounds in ordinary language. Bullets and short answers are fine.
+Answer the three rounds in ordinary language. Bullets, rough thoughts, and “I’m not sure” are fine; the installer will help sharpen them and show you what it understood.
 
 When the installer shows your setup, reply:
 
@@ -110,20 +115,22 @@ Once your personalized skill is ready, say:
 
 > **Run my daily CEO brief.**
 
-### Installing the personalized ZIP in regular Claude or Cowork
+### Finishing setup in Cowork
 
-Regular Claude and Cowork use a two-step installation because the original plugin stays generic while the final daily skill belongs only to you:
+Cowork keeps setup inside the plugin experience:
 
 1. Add the complete plugin from **Customize → Plugins** using the plugin file or marketplace provided to you.
-2. Run **“Set up my Chief of Staff Lite.”**
-3. When setup is approved, Claude creates `chief-of-staff-lite-personalized.zip`.
-4. Open **Customize → Skills**.
-5. Click **+**, then **Create skill**.
-6. Choose **Upload a skill** and select the personalized ZIP.
-7. Enable **Chief of Staff Lite** if it is not already enabled.
-8. Run **“Run my daily CEO brief.”**
+2. Click **Customize** on the installed plugin, or run **“Set up my Chief of Staff Lite.”**
+3. Complete the three short interview rounds and approve the preview.
+4. Cowork creates `chief-of-staff-lite-personalized.plugin` and shows a package preview.
+5. Review the package, then use its install button to accept the personalized version.
+6. Run **“Run my daily CEO brief.”**
 
-The personalized ZIP—not the original generic plugin—is the daily skill. You do not need to download the plugin again for ordinary use.
+There is no second skill ZIP to upload in Cowork. Re-run **“Update my Chief of Staff Lite setup”** whenever your priorities or preferences change.
+
+### Installing the personalized ZIP in regular Claude
+
+Regular Claude outside Cowork receives `chief-of-staff-lite-personalized.zip`. Upload it through **Customize → Skills → + → Create skill → Upload a skill**, enable Chief of Staff Lite, then run **“Run my daily CEO brief.”**
 
 ## Ways to use it
 
@@ -166,7 +173,8 @@ The plugin supports:
 | ChatGPT | A personalized ZIP you can add as a Personal Skill. |
 | Codex | A personalized skill in your user-owned Codex skills directory. |
 | Claude Code | A personalized skill in your user-owned Claude skills directory. |
-| Regular Claude and Cowork | A personalized ZIP uploaded through **Customize → Skills → Upload a skill**. |
+| Cowork | A personalized `.plugin` package reviewed and accepted directly in Cowork. |
+| Regular Claude | A personalized ZIP uploaded through **Customize → Skills → Upload a skill**. |
 
 Claude plugins are available on paid Claude plans. Custom skill upload also requires Skills and code execution to be enabled; Team and Enterprise administrators may restrict these capabilities. If **Upload a skill** is missing, enable the capability in Claude settings or contact your organization administrator.
 

@@ -99,6 +99,8 @@ Classify relevant material as **Decision**, **Meeting**, **Risk**, **Follow-thro
 3. reversibility; and
 4. unique CEO leverage.
 
+Treat the configured strategic priorities as ordered. When two items are otherwise comparable, favor the priority listed first; do not suppress a materially more urgent, consequential, or irreversible signal merely because it maps to a lower-ranked priority.
+
 Keep routine work out of CEO attention unless it creates a material decision, risk, stakeholder consequence, or CEO-only unblocker. Put delegable work under **Protect the agenda** or omit it.
 
 Keep facts separate from inferences. Give every substantive item a source. Label any reasoned conclusion as an inference.
