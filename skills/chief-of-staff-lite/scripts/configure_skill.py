@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import sys
 import tempfile
 from typing import Any
@@ -20,20 +21,15 @@ SKILL_NAME = "chief-of-staff-lite"
 PLATFORMS = {"codex", "claude-code", "claude", "cowork", "chatgpt"}
 HOSTED_PLATFORMS = {"claude", "cowork", "chatgpt"}
 PORTABLE_ARCHIVE_NAME = "chief-of-staff-lite-personalized.zip"
-COWORK_PLUGIN_NAME = "chief-of-staff-lite-personalized.plugin"
 BEGIN_MARKER = "<!-- CSL-CONFIG:BEGIN -->"
 END_MARKER = "<!-- CSL-CONFIG:END -->"
-INSTALLER_ROOT = Path(__file__).resolve().parent.parent
-PLUGIN_ROOT = INSTALLER_ROOT.parent.parent
-TEMPLATE_PATH = INSTALLER_ROOT / "assets" / "chief-of-staff-lite.template.md"
-DAILY_SKILL_ROOT = INSTALLER_ROOT.parent / SKILL_NAME
-DAILY_SKILL_PATH = DAILY_SKILL_ROOT / "SKILL.md"
-DAILY_SKILL_RELATIVE_PATH = Path("skills") / SKILL_NAME / "SKILL.md"
-TEMPLATE_RELATIVE_PATH = (
-    Path("skills")
-    / "chief-of-staff-lite-installer"
-    / "assets"
-    / "chief-of-staff-lite.template.md"
+SKILL_ROOT = Path(__file__).resolve().parent.parent
+SKILL_PATH = SKILL_ROOT / "SKILL.md"
+RUNTIME_FILES = (
+    "SKILL.md",
+    "references/customization.md",
+    "references/daily-brief.md",
+    "scripts/configure_skill.py",
 )
 
 # The temporary interview payload is small JSON. This cap rejects accidental document
@@ -107,31 +103,12 @@ def _is_within(path: Path, root: Path) -> bool:
         return False
 
 
-def validate_config_path(path: Path) -> Path:
-    if path.is_symlink():
-        raise ConfigError("The temporary configuration cannot be a symbolic link.")
-    resolved = path.resolve(strict=True)
-    allowed_roots = {Path("/tmp").resolve(), Path(tempfile.gettempdir()).resolve()}
-    if not any(_is_within(resolved, root) for root in allowed_roots):
-        roots = ", ".join(sorted(str(root) for root in allowed_roots))
-        raise ConfigError(
-            "The configuration must be a temporary file under one of these locations: "
-            f"{roots}."
-        )
-    if resolved.stat().st_size > MAX_CONFIG_BYTES:
+def read_config_payload() -> Any:
+    """Read only the JSON supplied by this invocation, never a reusable file."""
+    payload = sys.stdin.buffer.read(MAX_CONFIG_BYTES + 1)
+    if len(payload) > MAX_CONFIG_BYTES:
         raise ConfigError("The configuration is larger than the 64 KB safety limit.")
-    return resolved
-
-
-def read_config_payload(args: argparse.Namespace) -> tuple[Any, Path | None]:
-    """Read config from the current invocation or a validated temporary file."""
-    if args.config_stdin:
-        payload = sys.stdin.buffer.read(MAX_CONFIG_BYTES + 1)
-        if len(payload) > MAX_CONFIG_BYTES:
-            raise ConfigError("The configuration is larger than the 64 KB safety limit.")
-        return json.loads(payload.decode("utf-8")), None
-    config_path = validate_config_path(args.config)
-    return json.loads(config_path.read_text(encoding="utf-8")), config_path
+    return json.loads(payload.decode("utf-8"))
 
 
 def clean_text(
@@ -294,7 +271,8 @@ def print_review_candidates(candidates: list[tuple[str, str]]) -> None:
 
 
 def markdown_text(text: str) -> str:
-    return text.replace("|", r"\|")
+    text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return re.sub(r"([\\`*_{}\[\]()|])", r"\\\1", text)
 
 
 def bullet_lines(items: list[str]) -> str:
@@ -338,25 +316,24 @@ def render_config_block(config: dict[str, Any]) -> str:
 
 def platform_approval_action(platform: str, is_update: bool) -> tuple[str, str]:
     if platform in {"codex", "claude-code"}:
-        return (
-            "Create or update the user-owned Chief of Staff Lite skill shown by preview.",
-            "Reply **Yes, install it** to approve this exact setup.",
-        )
-    if platform == "cowork":
         if is_update:
             return (
-                "Update your existing Chief of Staff Lite skill with this configuration. "
-                "Cowork will show a replacement `.plugin` package for you to review and install.",
-                "Reply **Yes, prepare the update** to approve this exact change. "
-                "Cowork will review and install the replacement package separately.",
+                "Update only the configuration block of your existing user-owned Chief of Staff Lite skill.",
+                "Reply **Yes, update it** to approve this exact change.",
             )
         return (
-            "Create a personalized `.plugin` package for Cowork to review and install separately.",
-            "Reply **Yes, create the package** to approve this exact setup. You will review and install the resulting package separately.",
+            "Create the complete personalized Chief of Staff Lite skill in your user-owned skills directory.",
+            "Reply **Yes, install it** to approve this exact setup.",
+        )
+    if is_update:
+        return (
+            "Update your existing Chief of Staff Lite skill by creating a replacement standalone skill ZIP. "
+            "Upload it under Customize > Skills to replace the same skill.",
+            "Reply **Yes, prepare the update** to approve this exact change. You will replace the skill separately.",
         )
     return (
-        "Create a temporary personalized ZIP for you to install separately.",
-        "Reply **Yes, create the file** to approve this exact setup. You will install the resulting file separately.",
+        "Create a personalized standalone skill ZIP. Upload it under Customize > Skills to replace the same skill.",
+        "Reply **Yes, create the file** to approve this exact setup. You will replace the skill separately.",
     )
 
 
@@ -365,7 +342,7 @@ def render_approval_preview(
     platform: str,
     *,
     is_update: bool,
-    has_temporary_config: bool,
+    destination: str,
 ) -> str:
     """Render the complete user-visible approval contract from validated config."""
     priorities = "; ".join(markdown_text(item) for item in config["strategic_priorities"])
@@ -388,14 +365,9 @@ def render_approval_preview(
     drafts = "yes, never sent automatically" if config["include_follow_up_drafts"] else "no"
     action, approval = platform_approval_action(platform, is_update)
     unchanged = (
-        "Your existing skill has not been changed yet."
+        "Nothing has been written or installed yet. Your existing skill has not been changed yet."
         if is_update
         else "Nothing has been written or installed yet."
-    )
-    cleanup = (
-        "\n- Delete the temporary setup file after a successful install or package creation."
-        if has_temporary_config
-        else ""
     )
     return f"""## Your Chief of Staff Lite setup
 
@@ -414,9 +386,10 @@ def render_approval_preview(
 
 ### What will happen
 - {action}
+- **Exact destination:** {markdown_text(destination)}
 - Preserve the daily workflow and safety rules.
 - Store no passwords, tokens, or credentials.
-- Make no tool connections or external changes.{cleanup}
+- Make no tool connections or external changes.
 
 {approval}"""
 
@@ -427,6 +400,8 @@ def replace_config_block(skill_text: str, config_block: str) -> str:
             "The target skill does not have exactly one recognized configuration block. "
             "It was not changed."
         )
+    if skill_text.index(END_MARKER) < skill_text.index(BEGIN_MARKER):
+        raise ConfigError("The configuration markers are out of order. Reinstall the complete standalone skill.")
     before, remainder = skill_text.split(BEGIN_MARKER, 1)
     _, after = remainder.split(END_MARKER, 1)
     return before + config_block + after
@@ -464,12 +439,12 @@ def validate_target(platform: str) -> Path:
     if target_arg.parent.exists() and target_arg.parent.is_symlink():
         raise ConfigError("The user skill directory cannot be a symbolic link.")
     target = target_arg.resolve(strict=False)
-    plugin_skills_root = INSTALLER_ROOT.parent.resolve()
-    if _is_within(target, plugin_skills_root):
-        raise ConfigError(
-            "The installer will not personalize a plugin-owned skill. Choose the correct "
-            "platform so it can use a user-owned skill directory."
-        )
+    # Reject repository and cached plugin destinations, including ancestors above skills/.
+    for ancestor in (target, *target.parents):
+        if any((ancestor / marker).exists() for marker in (".git", ".claude-plugin", ".codex-plugin")):
+            raise ConfigError("Cannot personalize a repository or plugin-owned skill. Install the standalone skill in your personal skills directory.")
+    if _is_within(target, SKILL_ROOT.parent) and SKILL_ROOT.parent.name == "skills" and SKILL_ROOT.parent.parent.name not in {".codex", ".claude"}:
+        raise ConfigError("Cannot personalize a repository or plugin-owned skill. Use a user-owned skill directory.")
     skill_path = target / "SKILL.md"
     if skill_path.is_symlink():
         raise ConfigError("The installer will not overwrite a symbolic-linked SKILL.md.")
@@ -505,7 +480,8 @@ def validate_export_path(platform: str) -> Path:
     root_arg = Path(
         os.environ.get("CSL_EXPORT_DIR", tempfile.gettempdir())
     ).expanduser()
-    if root_arg.exists() and root_arg.is_symlink():
+    reject_symlinks(root_arg)
+    if root_arg.is_symlink():
         raise ConfigError("The portable export directory cannot be a symbolic link.")
     root = root_arg.resolve(strict=False)
     allowed_roots = {
@@ -523,9 +499,8 @@ def validate_export_path(platform: str) -> Path:
             "The portable package must be created in a temporary directory or the "
             "Cowork outputs directory."
         )
-    package_name = COWORK_PLUGIN_NAME if platform == "cowork" else PORTABLE_ARCHIVE_NAME
-    archive = root / package_name
-    if archive.exists() and archive.is_symlink():
+    archive = root / PORTABLE_ARCHIVE_NAME
+    if archive.is_symlink():
         raise ConfigError("The portable package cannot overwrite a symbolic link.")
     return archive
 
@@ -539,38 +514,47 @@ def load_base_skill(target: Path) -> tuple[str, str]:
                 "The existing SKILL.md is not Chief of Staff Lite. It was not changed."
             )
         return current, current
-    template = TEMPLATE_PATH.read_text(encoding="utf-8")
-    return "", template
+    return "", SKILL_PATH.read_text(encoding="utf-8")
 
 
-def validate_plugin_bundle() -> None:
-    """Verify the installer and daily skill ship together as one plugin."""
-    required_files = {
-        "installer template": TEMPLATE_PATH,
-        "daily skill": DAILY_SKILL_PATH,
+def reject_symlinks(path: Path) -> None:
+    for part in (path, *path.parents):
+        # macOS exposes system temp through these fixed OS-managed aliases.
+        aliases = {Path("/tmp"): Path("/private/tmp"), Path("/var"): Path("/private/var")}
+        if sys.platform == "darwin" and part in aliases and part.resolve() == aliases[part]:
+            continue
+        if part.is_symlink():
+            raise ConfigError("The path cannot be a symbolic link: " + str(part))
+
+
+def bundle_contents(root: Path = SKILL_ROOT) -> dict[str, bytes]:
+    """A closed runtime inventory prevents packaging unrelated files or skills."""
+    contents = {}
+    for relative in RUNTIME_FILES:
+        path = root / relative
+        reject_symlinks(path)
+        if not path.is_file():
+            raise ConfigError("The Chief of Staff Lite skill is incomplete. Missing: " + relative + ". Reinstall the complete standalone skill before setup.")
+        contents[relative] = path.read_bytes()
+    skill = contents["SKILL.md"].decode("utf-8")
+    if not re.match(r"\A---\nname: chief-of-staff-lite\n", skill):
+        raise ConfigError("The skill is not recognized as Chief of Staff Lite. Reinstall the standalone skill.")
+    replace_config_block(skill, BEGIN_MARKER + END_MARKER)
+    return contents
+
+
+def validate_skill_bundle() -> None:
+    bundle_contents()
+
+
+def approval_hash(contents: dict[str, bytes], destination: str, current: str, action: str) -> str:
+    payload = {
+        "files": {name: hashlib.sha256(data).hexdigest() for name, data in contents.items()},
+        "destination": destination,
+        "current": current,
+        "action": action,
     }
-    missing = [label for label, path in required_files.items() if not path.is_file()]
-    if missing:
-        raise ConfigError(
-            "The Chief of Staff Lite plugin is incomplete. Missing: "
-            f"{', '.join(missing)}. Reinstall the complete plugin before setup."
-        )
-    daily_skill = DAILY_SKILL_PATH.read_text(encoding="utf-8")
-    if not re.search(r"^name:\s*chief-of-staff-lite\s*$", daily_skill, re.MULTILINE):
-        raise ConfigError(
-            "The bundled daily skill is not recognized as Chief of Staff Lite. "
-            "Reinstall the complete plugin before setup."
-        )
-    if TEMPLATE_PATH.read_text(encoding="utf-8") != daily_skill:
-        raise ConfigError(
-            "The installer template does not match the bundled daily skill. "
-            "Reinstall the complete plugin before setup."
-        )
-
-
-def approval_hash(skill_text: str, destination: str) -> str:
-    payload = skill_text + "\n\0DESTINATION\0\n" + destination
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
 
 
 def print_preview(
@@ -581,7 +565,7 @@ def print_preview(
     config: dict[str, Any],
     platform: str,
     is_update: bool,
-    has_temporary_config: bool,
+    destination: str,
 ) -> None:
     current_lines = current_skill.splitlines(keepends=True)
     proposed_lines = proposed_skill.splitlines(keepends=True)
@@ -598,7 +582,7 @@ def print_preview(
             config,
             platform,
             is_update=is_update,
-            has_temporary_config=has_temporary_config,
+            destination=destination,
         )
     )
     print("APPROVAL_PREVIEW_END")
@@ -617,75 +601,46 @@ def atomic_write(path: Path, content: str) -> None:
             handle.write(content)
             handle.flush()
             os.fsync(handle.fileno())
-        os.chmod(temporary_path, 0o644)
+        os.chmod(temporary_path, 0o600)
         os.replace(temporary_path, path)
     finally:
         if temporary_path.exists():
             temporary_path.unlink()
 
 
-def atomic_write_zip(path: Path, skill_text: str) -> None:
+def atomic_write_zip(path: Path, contents: dict[str, bytes]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f".{path.name}.", dir=path.parent
-    )
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     os.close(descriptor)
     temporary_path = Path(temporary_name)
     try:
-        with zipfile.ZipFile(
-            temporary_path, "w", compression=zipfile.ZIP_DEFLATED
-        ) as archive:
-            archive.writestr(f"{SKILL_NAME}/SKILL.md", skill_text)
-        os.chmod(temporary_path, 0o644)
+        with zipfile.ZipFile(temporary_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for name, data in sorted(contents.items()):
+                archive.writestr(f"{SKILL_NAME}/{name}", data)
+        with temporary_path.open("rb") as handle:
+            os.fsync(handle.fileno())
         os.replace(temporary_path, path)
     finally:
         if temporary_path.exists():
             temporary_path.unlink()
 
 
-def atomic_write_cowork_plugin(path: Path, skill_text: str) -> None:
-    """Package a personalized copy of the complete plugin for Cowork."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f".{path.name}.", dir=path.parent
-    )
-    os.close(descriptor)
-    temporary_path = Path(temporary_name)
-    included_roots = (Path(".claude-plugin"), Path(".codex-plugin"), Path("skills"))
-    included_files = (Path("README.md"), Path("LICENSE"))
+def atomic_create_skill(target: Path, contents: dict[str, bytes]) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix=f".{SKILL_NAME}.", dir=target.parent))
     try:
-        with zipfile.ZipFile(
-            temporary_path, "w", compression=zipfile.ZIP_DEFLATED
-        ) as archive:
-            for relative_root in included_roots:
-                source_root = PLUGIN_ROOT / relative_root
-                if not source_root.is_dir():
-                    continue
-                for source_path in sorted(source_root.rglob("*")):
-                    if source_path.is_symlink():
-                        raise ConfigError(
-                            f"The plugin contains a symbolic link that cannot be packaged: "
-                            f"{source_path.relative_to(PLUGIN_ROOT)}"
-                        )
-                    if not source_path.is_file():
-                        continue
-                    relative_path = source_path.relative_to(PLUGIN_ROOT)
-                    if relative_path in {
-                        DAILY_SKILL_RELATIVE_PATH,
-                        TEMPLATE_RELATIVE_PATH,
-                    }:
-                        archive.writestr(str(relative_path), skill_text)
-                    else:
-                        archive.write(source_path, str(relative_path))
-            for relative_path in included_files:
-                source_path = PLUGIN_ROOT / relative_path
-                if source_path.is_file():
-                    archive.write(source_path, str(relative_path))
-        os.chmod(temporary_path, 0o644)
-        os.replace(temporary_path, path)
+        for name, data in contents.items():
+            path = staging / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("wb") as handle:
+                handle.write(data)
+                handle.flush()
+                os.fsync(handle.fileno())
+            path.chmod(0o600)
+        os.rename(staging, target)
     finally:
-        if temporary_path.exists():
-            temporary_path.unlink()
+        if staging.exists():
+            shutil.rmtree(staging)
 
 
 def parse_args() -> argparse.Namespace:
@@ -693,67 +648,65 @@ def parse_args() -> argparse.Namespace:
         description="Preview or apply a bounded Chief of Staff Lite configuration."
     )
     parser.add_argument("--platform", choices=sorted(PLATFORMS))
-    config_source = parser.add_mutually_exclusive_group()
-    config_source.add_argument("--config", type=Path)
-    config_source.add_argument(
-        "--config-stdin",
-        action="store_true",
-        help="Read the complete JSON configuration from this invocation's standard input.",
+    parser.add_argument(
+        "--config-stdin", action="store_true",
+        help="Read complete JSON from this invocation's standard input.",
+    )
+    parser.add_argument(
+        "--reviewed-candidates",
+        help="Exact candidate-review hash, only after contextual review of all candidate fields.",
     )
     parser.add_argument(
         "--check-bundle",
         action="store_true",
-        help="Verify that the complete two-skill plugin is installed.",
+        help="Verify the standalone skill and its bundled resources.",
     )
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--approved-hash")
-    parser.add_argument(
-        "--cleanup-config",
-        action="store_true",
-        help="Delete the validated temporary configuration after a successful apply.",
-    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
     try:
-        validate_plugin_bundle()
+        validate_skill_bundle()
         if args.check_bundle:
-            print("BUNDLE_OK: installer and daily skill are present.")
+            print("BUNDLE_OK: standalone skill and customization resources are present.")
             return 0
-        if args.platform is None or (args.config is None and not args.config_stdin):
-            raise ConfigError(
-                "--platform and either --config or --config-stdin are required unless "
-                "--check-bundle is used."
-            )
-        if args.cleanup_config and args.config_stdin:
-            raise ConfigError("--cleanup-config cannot be used with --config-stdin.")
-        raw_config, config_path = read_config_payload(args)
-        config = validate_config(raw_config)
+        if args.platform is None or not args.config_stdin:
+            raise ConfigError("--platform and --config-stdin are required unless --check-bundle is used.")
+        config = validate_config(read_config_payload())
         candidates = review_candidates(config)
         print_review_candidates(candidates)
+        review_hash = hashlib.sha256(json.dumps(config, sort_keys=True).encode("utf-8")).hexdigest()
+        if candidates and args.reviewed_candidates != review_hash:
+            print(f"CANDIDATE_REVIEW_HASH={review_hash}")
+            print("PREVIEW_WITHHELD: review the named fields in the supplied input. No values were echoed and no files were written.")
+            return 3
+        if args.reviewed_candidates and args.reviewed_candidates != review_hash:
+            raise ConfigError("Candidate review does not match this configuration. Review the current input.")
 
         if args.platform in HOSTED_PLATFORMS:
             archive_path = validate_export_path(args.platform)
-            if args.platform == "cowork":
-                current_skill = DAILY_SKILL_PATH.read_text(encoding="utf-8")
-                base_skill = current_skill
-                skill_path = DAILY_SKILL_RELATIVE_PATH
-            else:
-                current_skill = ""
-                base_skill = TEMPLATE_PATH.read_text(encoding="utf-8")
-                skill_path = Path(SKILL_NAME) / "SKILL.md"
-            proposed_skill = replace_config_block(base_skill, render_config_block(config))
+            current_skill = SKILL_PATH.read_text(encoding="utf-8")
+            base_skill = current_skill
+            skill_path = Path(SKILL_NAME) / "SKILL.md"
+            contents = bundle_contents()
         else:
             target = validate_target(args.platform)
+            reject_symlinks(platform_target(args.platform))
             current_skill, base_skill = load_base_skill(target)
-            proposed_skill = replace_config_block(base_skill, render_config_block(config))
+            # Existing copies must already contain customization resources. This is
+            # a configuration update, never an implicit runtime-code migration.
+            contents = bundle_contents(target) if current_skill else bundle_contents()
             skill_path = target / "SKILL.md"
             archive_path = None
-        is_update = has_active_config(current_skill)
-        destination = f"{args.platform}:{skill_path}:{archive_path or ''}"
-        digest = approval_hash(proposed_skill, destination)
+        proposed_skill = replace_config_block(base_skill, render_config_block(config))
+        contents["SKILL.md"] = proposed_skill.encode("utf-8")
+        is_update = has_active_config(current_skill) if archive_path else bool(current_skill)
+        action = "update configuration" if current_skill else "create complete skill"
+        destination = f"{args.platform}:{archive_path or skill_path}"
+        digest = approval_hash(contents, destination, current_skill, action)
 
         if not args.apply:
             print_preview(
@@ -764,7 +717,7 @@ def main() -> int:
                 config,
                 args.platform,
                 is_update,
-                config_path is not None,
+                str(archive_path or skill_path),
             )
             if archive_path is not None:
                 print(f"PACKAGE_PATH={archive_path}")
@@ -780,21 +733,17 @@ def main() -> int:
                 "Run preview again and ask the CEO to approve the new version."
             )
 
-        if args.platform == "cowork":
-            atomic_write_cowork_plugin(archive_path, proposed_skill)
-        elif archive_path is not None:
-            atomic_write_zip(archive_path, proposed_skill)
-        else:
+        if archive_path is not None:
+            atomic_write_zip(archive_path, contents)
+        elif current_skill:
             atomic_write(skill_path, proposed_skill)
-        if args.cleanup_config and config_path is not None:
-            config_path.unlink()
+        else:
+            atomic_create_skill(target, contents)
         if archive_path is not None:
             print(f"EXPORTED: {archive_path}")
         else:
             print(f"INSTALLED: {skill_path}")
         print(f"APPROVAL_HASH={digest}")
-        if args.cleanup_config and config_path is not None:
-            print(f"REMOVED_TEMP_CONFIG: {config_path}")
         return 0
     except FileNotFoundError as error:
         print(f"ERROR: Required file not found: {error.filename}", file=sys.stderr)
@@ -806,7 +755,7 @@ def main() -> int:
             file=sys.stderr,
         )
         return 2
-    except (ConfigError, OSError) as error:
+    except (ConfigError, OSError, UnicodeError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 2
 
