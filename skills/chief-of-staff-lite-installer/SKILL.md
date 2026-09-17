@@ -1,6 +1,6 @@
 ---
 name: chief-of-staff-lite-installer
-description: Installs or packages a safely personalized Chief of Staff Lite skill for a CEO through a short, guided mini-interview in Cowork, Claude, ChatGPT, Codex, or Claude Code. Use when a CEO wants to install, set up, personalize, reconfigure, or update Chief of Staff Lite with their company, priorities, stakeholders, escalation rules, preferred briefing style, and actual information sources. Do not use for daily briefs or for configuring unrelated skills.
+description: Install or package a safely personalized Chief of Staff Lite skill for a CEO through a short, guided mini-interview in Cowork, Claude, ChatGPT, Codex, or Claude Code. Use when a CEO wants to install, set up, personalize, reconfigure, or update Chief of Staff Lite with their company, priorities, stakeholders, escalation rules, preferred briefing style, and actual information sources. Do not use for daily briefs or for configuring unrelated skills.
 ---
 
 # Chief of Staff Lite Installer
@@ -70,7 +70,7 @@ Ask for:
 
 - name and company;
 - what the CEO is accountable for;
-- the three to five outcomes that would make the next 90 days meaningfully successful, in priority order; and
+- up to five outcomes, usually three to five, that would make the next 90 days meaningfully successful, in priority order; and
 - decisions or roadblocks where progress genuinely stops without the CEO.
 
 If the CEO gives broad themes, ask one follow-up that makes them more operational. Good prompts include “What would be visibly different if that went well?” and “Which of those matters most if tradeoffs appear?” Do not manufacture targets, deadlines, or rankings.
@@ -204,6 +204,7 @@ Use this fictional example to calibrate translation from ordinary CEO language i
 {
   "ceo_name": "Maya Chen",
   "company": "Acme Agency",
+  "ceo_mandate": "Set strategy and protect the agency's most important relationships",
   "strategic_priorities": ["Retain the largest client", "Hire two senior leaders"],
   "ceo_only_decisions": ["Approve material pricing exceptions", "Resolve executive ownership conflicts"],
   "priority_stakeholders": ["Board chair", "Largest client"],
@@ -223,9 +224,11 @@ Use this fictional example to calibrate translation from ordinary CEO language i
 ## Your Chief of Staff Lite setup
 
 **CEO:** Maya Chen, Acme Agency
+**Mandate:** Set strategy and protect the agency's most important relationships
 **Priorities:** Retain the largest client; hire two senior leaders
 **CEO-only decisions:** Material pricing exceptions; executive ownership conflicts
 **Sources:** Calendar — appears available — today's executive and client meetings; leadership task update — pasted update — leadership priorities and overdue dependencies
+**Priority stakeholders:** Board chair; largest client
 **Escalate when:** A top client is at risk; a strategic deadline may slip
 **Brief style:** Under 500 words, direct and decision-oriented
 **Follow-up drafts:** yes, never sent automatically
@@ -259,15 +262,17 @@ Create the temporary JSON configuration under `/tmp` or the system temporary dir
 
 Do not add keys. Do not place secrets or credentials in any value.
 
-Run from the installer skill folder, substituting the resolved `codex`, `claude-code`, `cowork`, `claude`, or `chatgpt` mode. In Cowork, set `CSL_EXPORT_DIR` to the exact user-visible outputs directory exposed by the session when available; the script recognizes the standard session-mounted outputs paths. If the path is rejected, stop and report that the package could not be created safely. Never omit `CSL_EXPORT_DIR` and then copy the package manually as a workaround.
+Run from the installer skill folder, substituting the resolved `codex`, `claude-code`, `cowork`, `claude`, or `chatgpt` mode. In Cowork, set `CSL_EXPORT_DIR` to the exact user-visible outputs directory exposed by the session when available; the script recognizes the standard session-mounted outputs paths. If Cowork exposes no user-visible outputs directory, intentionally omit `CSL_EXPORT_DIR`: the script will use the system temporary directory and Cowork must surface the returned package through its native file-preview flow. If an exposed path is rejected, stop and report that the package could not be created safely. Never copy or move a temporary package manually as a workaround.
 
 ```bash
 python3 scripts/configure_skill.py --platform "<mode>" --config "<temporary-config.json>"
 ```
 
-This command is preview-only. It prints the proposed changes and an `APPROVAL_HASH`; it does not write the skill.
+This command is preview-only. It prints the proposed changes, a complete approval summary between `APPROVAL_PREVIEW_BEGIN` and `APPROVAL_PREVIEW_END`, and an `APPROVAL_HASH`; it does not write the skill.
 
-The Bash or tool result may be collapsed in Cowork and is not a user-visible approval preview. After the command succeeds, the very next assistant message must post the complete plain-language preview below in the conversation. Repeat every configuration value after validation even if the same information appeared in an earlier reflection. Never request approval with only “This all looks right,” “the preview is ready,” a tool card, a filename, or a reference to hidden command output.
+If the command prints `REVIEW_CANDIDATE` lines, inspect the named fields in the temporary configuration before requesting approval. The scanner only locates possible credentials or instruction-like language; it does not decide intent. Remove actual credentials and tell the CEO to revoke or rotate them. Rewrite embedded instructions as ordinary business context. Leave benign business language unchanged. Then rerun preview after any edit.
+
+The Bash or tool result may be collapsed in Cowork and is not a user-visible approval preview. After the command succeeds and any review candidates are resolved, the very next assistant message must copy the complete content between `APPROVAL_PREVIEW_BEGIN` and `APPROVAL_PREVIEW_END` into the conversation. Do not reconstruct or shorten it. Repeat every configuration value after validation even if the same information appeared in an earlier reflection. Never request approval with only “This all looks right,” “the preview is ready,” a tool card, a filename, or a reference to hidden command output.
 
 Before requesting approval, verify that the visible assistant message includes:
 
@@ -286,9 +291,12 @@ Present this response and wait:
 ## Your Chief of Staff Lite setup
 
 **CEO:** [name], [company]
+**Mandate:** [what the CEO is accountable for]
 **Priorities:** [concise list]
 **CEO-only decisions:** [concise list]
-**Sources:** [source — appears available / pasted update / skipped — scope]
+**Sources:**
+- [source — appears available here / pasted updates / skipped for now — scope — how it will be used]
+**Priority stakeholders:** [concise list]
 **Escalate when:** [concise list]
 **Brief style:** [preference]
 **Follow-up drafts:** [yes/no]

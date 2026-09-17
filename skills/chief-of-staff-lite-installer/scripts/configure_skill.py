@@ -50,7 +50,7 @@ MAX_PRIORITY_STAKEHOLDERS = 12
 MAX_ESCALATION_TRIGGERS = 10
 MAX_SOURCES = 10
 
-CONFIG_KEYS = {
+CONFIG_FIELD_ORDER = (
     "ceo_name",
     "company",
     "ceo_mandate",
@@ -61,22 +61,34 @@ CONFIG_KEYS = {
     "brief_preference",
     "include_follow_up_drafts",
     "sources",
-}
+)
+CONFIG_KEYS = set(CONFIG_FIELD_ORDER)
 SOURCE_KEYS = {"name", "scope", "access_mode", "usage"}
 ACCESS_MODES = {"connected", "manual", "unavailable"}
-SECRET_PATTERNS = (
+ACCESS_MODE_LABELS = {
+    "connected": "appears available here",
+    "manual": "pasted updates",
+    "unavailable": "skipped for now",
+}
+
+# These formats are sufficiently specific to reject deterministically. Generic labels
+# such as "API key" and instruction-like phrases are only review candidates because
+# their meaning depends on context.
+BLOCKED_SECRET_PATTERNS = (
     re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----", re.IGNORECASE),
-    re.compile(
-        r"\b(password|passcode|api[_ -]?key|access[_ -]?token|private[_ -]?key)\s*[:=]\s*\S+",
-        re.IGNORECASE,
-    ),
     re.compile(r"\bBearer\s+[A-Za-z0-9._~+/=-]{12,}", re.IGNORECASE),
     re.compile(r"\bsk-[A-Za-z0-9_-]{16,}\b"),
     re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}\b"),
     re.compile(r"\bAKIA[A-Z0-9]{16}\b"),
     re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b", re.IGNORECASE),
 )
-INSTRUCTION_PATTERNS = (
+SECRET_REVIEW_PATTERNS = (
+    re.compile(
+        r"\b(password|passcode|api[_ -]?key|access[_ -]?token|private[_ -]?key)\s*[:=]\s*\S+",
+        re.IGNORECASE,
+    ),
+)
+INSTRUCTION_REVIEW_PATTERNS = (
     re.compile(r"\bignore\s+(all|any|previous|prior|your)\s+instructions?\b", re.IGNORECASE),
     re.compile(r"\b(system prompt|developer message)\b", re.IGNORECASE),
     re.compile(r"\b(bypass|override)\s+(the\s+)?(rules?|safety|instructions?)\b", re.IGNORECASE),
@@ -123,14 +135,9 @@ def clean_text(
         raise ConfigError(f"'{field}' exceeds the {max_length}-character limit.")
     if BEGIN_MARKER in text or END_MARKER in text:
         raise ConfigError(f"'{field}' contains a reserved configuration marker.")
-    if any(pattern.search(text) for pattern in SECRET_PATTERNS):
+    if any(pattern.search(text) for pattern in BLOCKED_SECRET_PATTERNS):
         raise ConfigError(
-            f"'{field}' appears to contain a credential or secret. Remove it before continuing."
-        )
-    if any(pattern.search(text) for pattern in INSTRUCTION_PATTERNS):
-        raise ConfigError(
-            f"'{field}' contains instruction-like text that is unsafe to embed in a skill. "
-            "Rewrite it as ordinary business context."
+            f"'{field}' contains a recognized credential format. Remove it before continuing."
         )
     if any(ord(character) < 32 for character in text):
         raise ConfigError(f"'{field}' contains unsupported control characters.")
@@ -235,6 +242,46 @@ def validate_config(raw: Any) -> dict[str, Any]:
     }
 
 
+def iter_config_text(config: dict[str, Any]) -> list[tuple[str, str]]:
+    """Return stable field paths and text for review-candidate scanning."""
+    values: list[tuple[str, str]] = []
+    for field in CONFIG_FIELD_ORDER:
+        value = config[field]
+        if isinstance(value, str):
+            values.append((field, value))
+        elif isinstance(value, list):
+            for index, item in enumerate(value):
+                if isinstance(item, str):
+                    values.append((f"{field}[{index}]", item))
+                elif isinstance(item, dict):
+                    for source_field in ("name", "scope", "access_mode", "usage"):
+                        values.append(
+                            (f"{field}[{index}].{source_field}", item[source_field])
+                        )
+    return values
+
+
+def review_candidates(config: dict[str, Any]) -> list[tuple[str, str]]:
+    """Surface possible issues without claiming a context-dependent verdict."""
+    candidates: list[tuple[str, str]] = []
+    for field, text in iter_config_text(config):
+        if any(pattern.search(text) for pattern in SECRET_REVIEW_PATTERNS):
+            candidates.append((field, "possible-credential"))
+        if any(pattern.search(text) for pattern in INSTRUCTION_REVIEW_PATTERNS):
+            candidates.append((field, "instruction-like-language"))
+    return candidates
+
+
+def print_review_candidates(candidates: list[tuple[str, str]]) -> None:
+    for field, candidate_type in candidates:
+        print(f"REVIEW_CANDIDATE field={field} type={candidate_type}")
+    if candidates:
+        print(
+            "REVIEW_REQUIRED: inspect these fields in context; the scanner does not "
+            "decide whether the text is safe or unsafe."
+        )
+
+
 def markdown_text(text: str) -> str:
     return text.replace("|", r"\|")
 
@@ -276,6 +323,69 @@ def render_config_block(config: dict[str, Any]) -> str:
 |---|---|---|---|
 {source_rows}
 {END_MARKER}"""
+
+
+def platform_approval_action(platform: str) -> tuple[str, str]:
+    if platform in {"codex", "claude-code"}:
+        return (
+            "Create or update the user-owned Chief of Staff Lite skill shown by preview.",
+            "Reply **Yes, install it** to approve this exact setup.",
+        )
+    if platform == "cowork":
+        return (
+            "Create a personalized `.plugin` package for Cowork to review and install separately.",
+            "Reply **Yes, create the package** to approve this exact setup. You will review and install the resulting package separately.",
+        )
+    return (
+        "Create a temporary personalized ZIP for you to install separately.",
+        "Reply **Yes, create the file** to approve this exact setup. You will install the resulting file separately.",
+    )
+
+
+def render_approval_preview(config: dict[str, Any], platform: str) -> str:
+    """Render the complete user-visible approval contract from validated config."""
+    priorities = "; ".join(markdown_text(item) for item in config["strategic_priorities"])
+    decisions = "; ".join(markdown_text(item) for item in config["ceo_only_decisions"])
+    stakeholders = "; ".join(
+        markdown_text(item) for item in config["priority_stakeholders"]
+    )
+    escalations = "; ".join(
+        markdown_text(item) for item in config["escalation_triggers"]
+    )
+    sources = "\n".join(
+        "- {name} — {mode} — {scope} — use: {usage}".format(
+            name=markdown_text(source["name"]),
+            mode=ACCESS_MODE_LABELS[source["access_mode"]],
+            scope=markdown_text(source["scope"]),
+            usage=markdown_text(source["usage"]),
+        )
+        for source in config["sources"]
+    )
+    drafts = "yes, never sent automatically" if config["include_follow_up_drafts"] else "no"
+    action, approval = platform_approval_action(platform)
+    return f"""## Your Chief of Staff Lite setup
+
+**CEO:** {markdown_text(config['ceo_name'])}, {markdown_text(config['company'])}
+**Mandate:** {markdown_text(config['ceo_mandate'])}
+**Priorities:** {priorities}
+**CEO-only decisions:** {decisions}
+**Sources:**
+{sources}
+**Priority stakeholders:** {stakeholders}
+**Escalate when:** {escalations}
+**Brief style:** {markdown_text(config['brief_preference'])}
+**Follow-up drafts:** {drafts}
+
+Nothing has been written or installed yet.
+
+### What will happen
+- {action}
+- Preserve the daily workflow and safety rules.
+- Store no passwords, tokens, or credentials.
+- Make no tool connections or external changes.
+- Delete the temporary setup file after a successful install or package creation.
+
+{approval}"""
 
 
 def replace_config_block(skill_text: str, config_block: str) -> str:
@@ -346,6 +456,9 @@ def is_cowork_session_outputs_root(path: Path) -> bool:
 
 
 def validate_export_path(platform: str) -> Path:
+    # Cowork normally supplies a user-visible outputs mount. If it does not, using
+    # the system temp directory is intentional; the host must surface that file
+    # through its native preview rather than copying it to an unvalidated path.
     root_arg = Path(
         os.environ.get("CSL_EXPORT_DIR", tempfile.gettempdir())
     ).expanduser()
@@ -422,6 +535,8 @@ def print_preview(
     proposed_skill: str,
     skill_path: Path,
     digest: str,
+    config: dict[str, Any],
+    platform: str,
 ) -> None:
     current_lines = current_skill.splitlines(keepends=True)
     proposed_lines = proposed_skill.splitlines(keepends=True)
@@ -432,6 +547,9 @@ def print_preview(
         tofile=str(skill_path),
     )
     sys.stdout.writelines(diff)
+    print("APPROVAL_PREVIEW_BEGIN")
+    print(render_approval_preview(config, platform))
+    print("APPROVAL_PREVIEW_END")
     print(f"APPROVAL_HASH={digest}")
     print("PREVIEW_ONLY: no files were written.")
 
@@ -553,6 +671,8 @@ def main() -> int:
         config_path = validate_config_path(args.config)
         raw_config = json.loads(config_path.read_text(encoding="utf-8"))
         config = validate_config(raw_config)
+        candidates = review_candidates(config)
+        print_review_candidates(candidates)
 
         if args.platform in HOSTED_PLATFORMS:
             archive_path = validate_export_path(args.platform)
@@ -580,6 +700,8 @@ def main() -> int:
                 proposed_skill,
                 skill_path,
                 digest,
+                config,
+                args.platform,
             )
             if archive_path is not None:
                 print(f"PACKAGE_PATH={archive_path}")
