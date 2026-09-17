@@ -48,7 +48,7 @@ For local reconfiguration in Codex or Claude Code, read only the marked `CSL-CON
 
 Conduct a three-round mini-interview, not a static questionnaire. Ask no more than three questions in one message, use each answer to choose the next question, and explain unfamiliar terms in ordinary language. Use context already provided; never repeat a question the CEO has answered.
 
-In Cowork, use `AskUserQuestion` when it is available. Use its free-text/custom-answer path for mandate, outcomes, CEO-only decisions, stakeholders, and escalation context. Use concise structured choices for cadence, reading time, directness, follow-up drafts, and per-source handling. The tool already supplies skip and custom-answer paths, so do not add “Other” or “None” options. If the tool is unavailable, use the conversational response shapes below without mentioning the missing tool.
+In Cowork, keep open-ended discovery conversational. Ask about mandate, outcomes, CEO-only decisions, stakeholders, and escalation context in ordinary prose so the CEO can answer naturally; do not force those answers through `AskUserQuestion` or its custom-answer path. Use `AskUserQuestion` only for bounded decisions with concise, mutually exclusive choices, such as cadence, reading time, directness, follow-up drafts, and per-source handling. The tool already supplies skip and custom-answer paths, so do not add “Other” or “None” options. If the tool is unavailable for a bounded decision, ask the same choice conversationally without mentioning the missing tool.
 
 Help the CEO turn broad themes into useful operating guidance:
 
