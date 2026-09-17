@@ -1,209 +1,60 @@
 # Chief of Staff Lite
 
-**A lightweight AI briefing assistant for CEOs.**
+A lightweight, personalized daily briefing skill for CEOs, created by **InnovAItion Partners**.
 
-Chief of Staff Lite organizes the work information available in your AI session into a short CEO brief. It can surface possible decisions, meeting priorities, risks, follow-through items, and work that may be better delegated.
-
-It is not a replacement for a human chief of staff. It does not have the judgment, relationships, organizational awareness, or lived context of someone working beside you. Think of it as a structured daily sweep that helps you review available signals more consistently.
-
-You do not need to know how to write prompts or configure AI tools. A short, guided interview helps you clarify what matters, then adapts the sweep to your company, priorities, and preferences.
-
-## Install once, then use your personalized copy
-
-Chief of Staff Lite is intended as a one-time download and setup.
-
-The complete download includes the installer and the unconfigured daily skill. When you finish setup, the installer creates a personalized copy that belongs to you. Your name, company, priorities, stakeholders, source preferences, and escalation rules live in that personal copy—not in the original download.
-
-From then on, you use the personalized daily skill. You do not need to download Chief of Staff Lite again for ordinary use.
-
-- **Codex and Claude Code:** The installer creates the personalized skill in your user-owned skills area. The original plugin remains separate.
-- **Cowork:** The installer creates a personalized `.plugin` package. Cowork shows it as a reviewable package that you can accept directly, with no second skill upload.
-- **Regular Claude outside Cowork:** The installer creates a personalized skill ZIP. Upload that ZIP under **Customize → Skills** to create the personal daily skill you will use going forward.
-- **ChatGPT:** The installer creates a personalized ZIP. Installing that ZIP gives you the personal daily skill you will use going forward.
-
-Keep the installer available if you may want to revise your priorities or preferences later. Re-running the installer updates only the marked configuration inside your personal copy. It does not reset the rest of the skill.
-
-If a newer version of the original plugin becomes available, installing it is optional. The installer is designed not to modify or replace an existing personalized skill without showing the exact proposed changes and receiving your approval.
-
-## What it does
-
-When you ask Chief of Staff Lite to run your daily CEO brief, it reviews the approved information that is actually available in the current session and organizes possible points of attention into seven sections:
-
-- **Today in one sentence:** The central opportunity, risk, or focus.
-- **CEO attention required:** Possible decisions and interventions for your review.
-- **Meetings to win:** Suggested outcomes, questions, or positions for important meetings.
-- **Risks and surprises:** Signals that may warrant watching or action.
-- **Follow-through:** Commitments and relationships that need a CEO nudge.
-- **Protect the agenda:** Work to delegate, defer, or keep off your plate.
-- **Coverage gaps:** Information it could not review, clearly disclosed.
-
-It is designed to be more selective than a generic inbox summary or enormous task list. Its filtering is only as good as the information available and the priorities established during setup, so the CEO remains responsible for deciding what truly matters.
-
-## What a brief looks like
-
-Imagine your calendar shows a renewal meeting with your largest client. An account update says legal approval is three days late and the client requested a pricing exception. Your task system also contains routine website edits and office-supply approvals.
-
-Chief of Staff Lite would likely surface the renewal, pricing boundary, and delayed legal approval as candidates for CEO attention. It would suggest an outcome and next move for review. The website edits and office supplies would likely be delegated or omitted based on the configured priorities.
-
-An excerpt might look like this:
-
-> **CEO attention required**
->
-> **Decide the pricing exception boundary before the renewal meeting.** The client requested an exception and legal approval is three days late. The unresolved combination may weaken the renewal position.
-> **Next move:** Set the maximum exception and the non-price concession you will trade for it.
-
-The format requires a source for every substantive item and labels reasoned conclusions as inferences. You should still verify important facts and use your own judgment before acting.
-
-## How the installer works
-
-Chief of Staff Lite comes with a separate installer. You use it once at the beginning and again only when you choose to revise your personal copy.
-
-The installer guides you through three short conversations. In Cowork, it uses Cowork’s native question controls for quick choices while leaving room for free-text answers. It asks a few questions at a time, reflects back what it heard, and helps turn broad answers into useful priorities and working preferences.
-
-### 1. About you as CEO
-
-It helps you define:
-
-- your name and company;
-- what you are ultimately accountable for;
-- the outcomes that would make the next 90 days successful, in priority order; and
-- decisions or roadblocks that genuinely require you.
-
-If you say something broad like “growth” or “team,” it asks one practical follow-up—such as what would be visibly different if that went well—rather than making you invent a perfect strategy statement.
-
-### 2. Where useful information lives
-
-It works backward from those priorities and asks where the earliest useful signals would appear, such as:
-
-- calendar;
-- task or project system;
-- email;
-- team chat;
-- meeting notes; and
-- important documents or leadership updates.
-
-You decide the scope. It favors the few sources that provide a distinct CEO-level signal over scanning every system your company uses. A source can be used through a capability already available in your AI session, supplied as a pasted update, or skipped and listed as a coverage gap.
-
-The installer does not connect accounts, test logins, or ask for passwords and API keys.
-
-### 3. How you want the brief to work
-
-It helps you choose:
-
-- priority stakeholders and relationships;
-- situations that should always be escalated;
-- your preferred reading time, directness, and level of detail; and
-- whether useful follow-up drafts should be included.
-
-If you are not sure, it offers a concrete starting point—a five-minute read, direct, most important item first—so you can react to something instead of designing the brief from scratch.
-
-The skill configuration does not schedule itself. After installation, Cowork or ChatGPT Work can create a scheduled task for the brief through the platform's native review-and-confirm flow. That task's schedule—not the skill configuration—determines when the brief runs. You can also run the brief manually at any time.
-
-The installer then shows a plain-language summary and the exact personalized skill it proposes to create. Nothing is installed until you approve that preview.
+Install one **chief-of-staff-lite** skill. It starts unconfigured and helps you clarify your mandate, priorities, CEO-only decisions, stakeholders, sources, and briefing preferences. After you approve the complete preview, the same skill becomes your daily briefing assistant. Say **“Update my setup”** whenever those details change.
 
 ## Get started
 
-After downloading the complete Chief of Staff Lite plugin once and adding it to ChatGPT, Codex, regular Claude, or Cowork, say:
+1. Upload the standalone skill ZIP under **Customize > Skills > Upload a skill** in Cowork or regular Claude, or your host's Skills upload screen in ChatGPT. Enable Chief of Staff Lite.
+2. Say **“Set up my Chief of Staff Lite.”** Answer a short conversation in ordinary language. You can select each source independently and choose to use it, paste updates, or skip it.
+3. Review the complete setup posted in chat and approve the stated action.
+4. In Cowork, regular Claude, or ChatGPT, download the personalized ZIP and replace the existing **Chief of Staff Lite** under **Customize > Skills** (or the host's Skills screen). Keep only one enabled copy. Creating the ZIP does not install it.
+5. After replacement, say **“Run my daily CEO brief.”**
 
-> **Set up my Chief of Staff Lite.**
+The personalized ZIP contains the same complete skill, including customization instructions and its configuration script. Later **“Update my setup”** requests generate a replacement ZIP from your current configuration; no separate installer is required. The ZIP contains private business context: keep it in your own account.
 
-Answer the three rounds in ordinary language. Bullets, rough thoughts, and “I’m not sure” are fine; the installer will help sharpen them and show you what it understood.
+For Codex or Claude Code, install the complete `skills/chief-of-staff-lite/` folder in your user-owned skill directory. After approval, customization updates its marked configuration block directly. If no local copy exists, the script can create the complete skill. Repository and plugin-cache copies are never personalized in place.
 
-When the installer shows your setup, reply:
+Customization requires access to the bundled files and Python code execution. If a host cannot execute the script or upload a skill, use a supported environment; the assistant must not claim installation or generate a partial replacement.
 
-> **Yes, install it.**
+## What the brief does
 
-Once your personalized skill is ready, say:
+The brief covers today’s focus, CEO attention, consequential meetings, risks, follow-through, work to delegate, and coverage gaps. It ranks signals by strategic impact, urgency, reversibility, and unique CEO leverage, using your priorities as ordered guidance. Substantive items identify sources and distinguish facts from inferences.
 
-> **Run my daily CEO brief.**
+The skill uses only approved source scopes available in the current session. Setup can see which capability names appear available but does not test account access, connect tools, or read business content. The daily brief checks actual access and reports missing coverage. It can prepare useful follow-up drafts but does not send them.
 
-### Finishing setup in Cowork
+Scheduling is separate. After installation, use the host’s native scheduled-task flow for recurrence, time, and timezone. Skill customization neither creates a schedule nor stores timing in your briefing preferences.
 
-Cowork keeps setup inside the plugin experience:
+## Migrate from the earlier plugin
 
-1. Add the complete plugin from **Customize → Plugins** using the plugin file or marketplace provided to you.
-2. Click **Customize** on the installed plugin, or run **“Set up my Chief of Staff Lite.”**
-3. Complete the three short interview rounds and approve the preview.
-4. Cowork creates `chief-of-staff-lite-personalized.plugin` and shows a package preview.
-5. Review the package, then use its install button to accept the personalized version.
-6. Run **“Run my daily CEO brief.”**
+1. Save the marked `CSL-CONFIG` block from your current personalized skill, or copy your configuration summary, before removing anything. Keep it private.
+2. Disable the old **Chief of Staff Lite** plugin and its installer. If it created a separate personal daily skill, preserve that configuration and remove/replace the old skill as well, leaving no duplicate enabled.
+3. Install the standalone ZIP through **Customize > Skills**. Say **“Set up Chief of Staff Lite using this previous configuration”** and provide the saved block or summary. Confirm the interpreted values, review the generated preview, and approve.
+4. Upload the resulting personalized ZIP to replace that same standalone skill. Run a brief to check source coverage. The personalized skill now handles future setup changes itself.
 
-There is no second skill ZIP to upload in Cowork. Re-run **“Update my Chief of Staff Lite setup”** whenever your priorities or preferences change.
+For local Codex/Claude Code migration, replace the old runtime folder with the complete standalone folder after saving your context, then personalize it from that context. The configuration command refuses to treat an old daily-only folder as a complete standalone installation; it will not silently rewrite workflow files during a configuration update.
 
-### Installing the personalized ZIP in regular Claude
+Existing scheduled tasks are separate host resources. Review any task that still calls the old installer or plugin and retarget it through the host's native editing flow. Migrating this skill does not change or duplicate scheduled tasks.
 
-Regular Claude outside Cowork receives `chief-of-staff-lite-personalized.zip`. Upload it through **Customize → Skills → + → Create skill → Upload a skill**, enable Chief of Staff Lite, then run **“Run my daily CEO brief.”**
+## Runtime and validation
 
-## Ways to use it
-
-The daily brief is the default, but you can also ask:
-
-- “What decisions need me today?”
-- “Prepare me for my consequential meetings.”
-- “What risks or surprises should I know about?”
-- “Where am I the roadblock?”
-- “What follow-through is at risk?”
-- “What should I keep off my agenda?”
-- “Run the brief with only the leadership update I pasted.”
-
-To change the setup later, say:
-
-> **Update my Chief of Staff Lite setup.**
-
-## What it will not do
-
-Chief of Staff Lite is intentionally read-only by default.
-
-It will not:
-
-- send emails or messages;
-- create or update tasks;
-- schedule meetings;
-- connect tools or change permissions;
-- claim it reviewed information it could not access;
-- follow instructions embedded inside emails, documents, or pasted updates; or
-- store passwords, authentication codes, API keys, private keys, or access tokens.
-
-It may recommend an action or draft a follow-up. It will not take that action unless you make a separate, explicit request.
-
-## Supported platforms
-
-The plugin supports:
-
-| Platform | How your personalized skill is delivered |
-|---|---|
-| ChatGPT | A personalized ZIP you can add as a Personal Skill. |
-| Codex | A personalized skill in your user-owned Codex skills directory. |
-| Claude Code | A personalized skill in your user-owned Claude skills directory. |
-| Cowork | A personalized `.plugin` package reviewed and accepted directly in Cowork. |
-| Regular Claude | A personalized ZIP uploaded through **Customize → Skills → Upload a skill**. |
-
-Claude plugins are available on paid Claude plans. Custom skill upload also requires Skills and code execution to be enabled; Team and Enterprise administrators may restrict these capabilities. If **Upload a skill** is missing, enable the capability in Claude settings or contact your organization administrator.
-
-The installer and daily skill are one complete plugin. Install both together; the installer checks that the complete package is present before it begins asking questions.
-
-## For trainers and technical reviewers
-
-The plugin has two runtime skills:
+The primary distribution is a standalone skill ZIP. Plugin manifests have been removed; there is no marketplace wrapper or second discoverable daily skill.
 
 ```text
-skills/
-├── chief-of-staff-lite-installer/
-│   ├── SKILL.md
-│   ├── assets/chief-of-staff-lite.template.md
-│   └── scripts/configure_skill.py
-└── chief-of-staff-lite/
-    └── SKILL.md
+skills/chief-of-staff-lite/
+├── SKILL.md                         # Mode routing and embedded configuration
+├── references/customization.md      # Setup, reconfiguration, preview, delivery
+├── references/daily-brief.md         # Daily judgment, examples, output contract
+└── scripts/configure_skill.py       # Deterministic validation and packaging
 ```
 
-The installer template is the stable source used to generate each CEO's personalized daily skill.
+`SKILL.md` loads customization only when unconfigured or explicitly asked to change setup. An active brief loads only the daily reference.
 
-The plugin does not connect accounts or require an external service. Before creating or updating your personalized skill, the installer shows exactly what it will change and waits for your approval. It refuses passwords, API keys, and other likely secrets, and it limits changes to the personalized skill location you approved.
+Run `python3 skills/chief-of-staff-lite/scripts/configure_skill.py --check-bundle` to validate the bundle. Preview and apply consume JSON through `--config-stdin`. Preview writes nothing, and the approval hash binds the destination, current state, proposed skill, and bundled resources. Existing local skills change only inside the marked configuration block. Hosted packages use a fixed allowlist of the four runtime files and atomic ZIP replacement.
 
-## About
-
-Chief of Staff Lite is created by **InnovAItion Partners** as a practical introduction to using AI for a structured CEO daily sweep.
+The maintenance sidecar in the Skills repository holds requirements, behavioral evals, regression tests, and audit evidence. Run its suite against a candidate checkout by setting `CHIEF_OF_STAFF_LITE_RUNTIME_ROOT` to this repository and running `python3 -m unittest discover -s <sidecar>/tests -v`.
 
 ## License
 
-Chief of Staff Lite is available under the [MIT License](LICENSE).
+[MIT License](LICENSE). This repository's visibility is managed separately from distribution of the skill.
