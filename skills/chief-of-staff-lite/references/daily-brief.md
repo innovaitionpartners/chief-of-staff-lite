@@ -4,7 +4,7 @@ Read only for an active configuration and a requested brief. These shared standa
 
 ## Contents
 
-[Execution](#execute-the-adapted-skill), [Sources](#source-coverage-and-evidence), [Conflicting evidence](#reconcile-conflicting-evidence), [Judgment](#judgment-and-preparation), [Brief format](#seven-section-brief), [Delivery check](#before-delivery).
+[Execution](#execute-the-adapted-skill), [Sources](#source-coverage-and-evidence), [Conflicting evidence](#reconcile-conflicting-evidence), [Judgment](#judgment-and-preparation), [Length](#checked-reading-time), [Drafts](#optional-follow-up-drafts), [Brief format](#seven-section-brief), [Delivery check](#before-delivery).
 
 ## Execute the adapted skill
 
@@ -48,11 +48,35 @@ Prepare what the adapted procedure calls for: a grounded decision, reconciled fo
 
 Honor the personalized length, focus, item selection, and preparation inside the required sections. Keep all seven sections in order; when a section has no material finding, say “None identified from available sources.” Never invent work to fill a section. In Coverage gaps, identify configured sources not reviewed and what that prevents you from judging. Do not reprint the setup or explain how the prompt was customized.
 
-If enabled, include at most two concise unsent follow-up drafts when they advance a surfaced item. Ground each recipient, ask, and any deadline in the evidence; do not invent promises. If drafts are disabled, omit them even if the authored procedure suggests one. Never send, update tasks, schedule, or take another external action without a separate explicit request.
+## Checked reading time
+
+Use the normalized **Brief length** in the active configuration. Dense decision material reads more slowly than ordinary prose, so use these maximums for the core output from the title through Coverage gaps. Optional drafts do not count toward the core ceiling because they have a separate contract below.
+
+| Preference | Core-brief maximum | Use the space for |
+|---|---:|---|
+| 3 minutes | 300 words | Headline triage: only the highest-leverage decisions, immediate risks, and essential meeting or follow-through moves |
+| 5 minutes | 550 words | The default decision brief: key context, tradeoffs, preparation, and next moves for the material items |
+| 10 minutes | 1,000 words | Fuller synthesis: additional material dependencies, decision context, meeting preparation, and reconciled follow-through |
+
+These limits create room, not a quota. A thin-evidence day should be shorter. Never pad empty sections, repeat an issue, or manufacture analysis to approach the ceiling. A longer preference permits more material items and deeper supported preparation; it does not lower the evidence bar or turn the brief into an activity digest.
+
+When space is tight, preserve material risks, decision facts, uncertainty, source attribution, and concrete next moves before optional context. First remove repetition, compress phrasing, and cross-reference an issue instead of restating it. Do not silently drop a critical risk or distort evidence to pass the check.
+
+## Optional follow-up drafts
+
+Follow-up drafts are supplemental and have their own section and limits. Include them only when **Include follow-up drafts** is `yes` and a draft materially advances an item already surfaced in the core brief.
+
+- Put drafts after Coverage gaps under `## Unsent follow-up drafts`; omit the entire section when no draft is useful.
+- Include at most two. Use `### Draft 1 — [recipient] / [purpose]` and, if needed, `### Draft 2 — [recipient] / [purpose]`.
+- Limit each draft body to 75 words and both draft bodies together to 150 words. These words are checked separately from the core reading-time budget.
+- Ground the recipient, situation, ask, and any deadline in cited evidence. Preserve uncertainty and never invent authority, promises, approvals, or commitments.
+- Prefer one concrete ask. If the recipient, authority, or needed context is missing, withhold the draft and identify the gap instead.
+
+If drafts are disabled, omit them even if the authored procedure suggests one. Never send, update tasks, schedule, or take another external action without a separate explicit request.
 
 ## Seven-section brief
 
-Use this structure for every daily brief. Tailor the content, analytical depth, and useful preparation to the authored workflow. Put each issue’s main treatment in the most relevant section; cross-reference it briefly elsewhere when needed rather than duplicate it. After section seven, append up to two unsent drafts if enabled and useful; drafts are optional supplemental output, not replacement sections.
+Use this structure for every daily brief. Tailor the content, analytical depth, and useful preparation to the authored workflow. Put each issue’s main treatment in the most relevant section; cross-reference it briefly elsewhere when needed rather than duplicate it. After section seven, append up to two unsent drafts if enabled and useful; drafts are optional supplemental output, not replacement sections. Use the exact draft heading structure shown so the final check can count them.
 
 ```markdown
 # CEO Brief — [date]
@@ -77,7 +101,17 @@ Use this structure for every daily brief. Tailor the content, analytical depth, 
 
 ## Coverage gaps
 - [Configured source not reviewed and the smallest input needed to close the gap.]
+
+## Unsent follow-up drafts
+
+### Draft 1 — [recipient] / [purpose]
+[Concise draft grounded in a surfaced item.]
+
+### Draft 2 — [recipient] / [purpose]
+[Optional second draft.]
 ```
+
+Omit the entire `## Unsent follow-up drafts` section when drafts are disabled or no draft is materially useful. Never include an empty drafts section.
 
 ## Before delivery
 
@@ -89,5 +123,14 @@ Check the result against the authored procedure and confirmed profile:
 - Did you reconcile material contradictions by scope, event time, and evidence quality, resolving them only when supported?
 - Did you omit noise, consolidate duplicates, and avoid resurfacing resolved commitments?
 - Are coverage limits, preferences, and action boundaries respected?
+- Did you preserve critical risks and evidence before optional context or drafts?
 
-Correct any failure before delivering. Structural compliance alone is not useful personalization.
+Then pass the exact final Markdown through the bundled checker from this skill's folder:
+
+```bash
+python3 scripts/configure_skill.py --check-brief-stdin --brief-length-minutes <3|5|10> --drafts-enabled <yes|no> <<'CSL_BRIEF'
+<exact final brief>
+CSL_BRIEF
+```
+
+Deliver only after it returns `BRIEF_OK`. The checker verifies the core seven-section word ceiling separately from the optional draft section, plus exact section order, draft placement and count, and the 75-word per-draft limit. It does not judge evidence quality or personalized usefulness. Correct those semantically using the checklist above. If code execution is unavailable during the daily run, do not claim the brief was checked: count conservatively, keep the seven-section and draft contracts, and state “Length check unavailable in this session” in Coverage gaps.

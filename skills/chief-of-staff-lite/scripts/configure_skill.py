@@ -44,6 +44,25 @@ MAX_CEO_ONLY_DECISIONS = 6
 MAX_PRIORITY_STAKEHOLDERS = 12
 MAX_ESCALATION_TRIGGERS = 10
 MAX_SOURCES = 10
+MAX_BRIEF_BYTES = 131_072
+
+# Reading-time choices are normalized to explicit core-brief ceilings. Dense CEO
+# decision material reads more slowly than ordinary prose. Optional drafts are
+# supplemental and use separate limits below. These are ceilings, not quotas:
+# sparse evidence should produce a shorter brief rather than padded prose.
+BRIEF_LENGTH_WORD_LIMITS = {3: 300, 5: 550, 10: 1_000}
+BRIEF_DRAFT_WORD_LIMIT = 75
+BRIEF_DRAFT_SECTION_WORD_LIMIT = 150
+BRIEF_SECTIONS = (
+    "Today in one sentence",
+    "CEO attention required",
+    "Meetings to win",
+    "Risks and surprises",
+    "Follow-through",
+    "Protect the agenda",
+    "Coverage gaps",
+)
+OPTIONAL_DRAFTS_SECTION = "Unsent follow-up drafts"
 
 CONFIG_FIELD_ORDER = (
     "ceo_name",
@@ -53,6 +72,7 @@ CONFIG_FIELD_ORDER = (
     "ceo_only_decisions",
     "priority_stakeholders",
     "escalation_triggers",
+    "brief_length_minutes",
     "brief_preference",
     "include_follow_up_drafts",
     "sources",
@@ -89,6 +109,11 @@ INSTRUCTION_REVIEW_PATTERNS = (
     re.compile(r"\bignore\s+(all|any|previous|prior|your)\s+instructions?\b", re.IGNORECASE),
     re.compile(r"\b(system prompt|developer message)\b", re.IGNORECASE),
     re.compile(r"\b(bypass|override)\s+(the\s+)?(rules?|safety|instructions?)\b", re.IGNORECASE),
+)
+LENGTH_LANGUAGE_PATTERN = re.compile(
+    r"\b(?:(?:one|two|three|four|five|six|seven|eight|nine|ten)|\d+)"
+    r"(?:[ -]?minutes?|\s+(?:total\s+)?words?)\b",
+    re.IGNORECASE,
 )
 
 
@@ -165,6 +190,17 @@ def clean_workflow(value: Any) -> str:
     return text.replace("\r\n", "\n").replace("\r", "\n")
 
 
+def clean_brief_preference(value: Any) -> str:
+    """Keep style guidance separate from the normalized reading-time field."""
+    text = clean_text(value, "brief_preference")
+    if LENGTH_LANGUAGE_PATTERN.search(text):
+        raise ConfigError(
+            "'brief_preference' must contain style and focus guidance only; store "
+            "reading time in 'brief_length_minutes'."
+        )
+    return text
+
+
 def validate_config(raw: Any) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise ConfigError("The configuration must be a JSON object.")
@@ -178,6 +214,14 @@ def validate_config(raw: Any) -> dict[str, Any]:
     include_drafts = raw["include_follow_up_drafts"]
     if not isinstance(include_drafts, bool):
         raise ConfigError("'include_follow_up_drafts' must be true or false.")
+
+    brief_length = raw["brief_length_minutes"]
+    if (
+        isinstance(brief_length, bool)
+        or not isinstance(brief_length, int)
+        or brief_length not in BRIEF_LENGTH_WORD_LIMITS
+    ):
+        raise ConfigError("'brief_length_minutes' must be exactly 3, 5, or 10.")
 
     sources = raw["sources"]
     if not isinstance(sources, list) or not 1 <= len(sources) <= MAX_SOURCES:
@@ -241,7 +285,8 @@ def validate_config(raw: Any) -> dict[str, Any]:
             "escalation_triggers",
             maximum=MAX_ESCALATION_TRIGGERS,
         ),
-        "brief_preference": clean_text(raw["brief_preference"], "brief_preference"),
+        "brief_length_minutes": brief_length,
+        "brief_preference": clean_brief_preference(raw["brief_preference"]),
         "include_follow_up_drafts": include_drafts,
         "sources": clean_sources,
         "workflow_summary": clean_text(raw["workflow_summary"], "workflow_summary"),
@@ -266,6 +311,93 @@ def iter_config_text(config: dict[str, Any]) -> list[tuple[str, str]]:
                             (f"{field}[{index}].{source_field}", item[source_field])
                         )
     return values
+
+
+def read_brief_payload() -> str:
+    """Read one candidate Markdown brief from stdin with a bounded input size."""
+    payload = sys.stdin.buffer.read(MAX_BRIEF_BYTES + 1)
+    if len(payload) > MAX_BRIEF_BYTES:
+        raise ConfigError("The candidate brief is larger than the 128 KB safety limit.")
+    text = payload.decode("utf-8").strip()
+    if not text:
+        raise ConfigError("The candidate brief cannot be blank.")
+    return text
+
+
+def visible_word_count(markdown: str) -> int:
+    """Count visible words, excluding Markdown link destinations and punctuation."""
+    visible = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", markdown)
+    visible = re.sub(r"<https?://[^>]+>", "", visible)
+    visible = re.sub(r"https?://\S+", "", visible)
+    return len(re.findall(r"\b[\w]+(?:[’'-][\w]+)*\b", visible, re.UNICODE))
+
+
+def validate_brief_output(
+    text: str, brief_length_minutes: int, drafts_enabled: bool
+) -> tuple[int, int, list[int]]:
+    """Check the deterministic daily-output contract without judging substance."""
+    if brief_length_minutes not in BRIEF_LENGTH_WORD_LIMITS:
+        raise ConfigError("Brief length must be exactly 3, 5, or 10 minutes.")
+
+    level_two = re.findall(r"^##\s+(.+?)\s*$", text, re.MULTILINE)
+    expected = list(BRIEF_SECTIONS)
+    has_draft_section = OPTIONAL_DRAFTS_SECTION in level_two
+    if has_draft_section:
+        expected.append(OPTIONAL_DRAFTS_SECTION)
+    if level_two != expected:
+        raise ConfigError(
+            "The brief must contain the seven required ## sections once and in order; "
+            "only an optional final ## Unsent follow-up drafts section may follow them."
+        )
+
+    draft_matches = list(
+        re.finditer(r"^###\s+Draft\s+(\d+)\s+—\s+.+$", text, re.MULTILINE)
+    )
+    any_draft_headings = re.findall(r"^###\s+Draft\b.*$", text, re.MULTILINE)
+    if any_draft_headings and not has_draft_section:
+        raise ConfigError("Drafts must appear under the final ## Unsent follow-up drafts section.")
+    if has_draft_section and not drafts_enabled:
+        raise ConfigError("Follow-up drafts are disabled for this configuration.")
+    if has_draft_section and not draft_matches:
+        raise ConfigError("Remove the empty drafts section or include one or two labeled drafts.")
+    if any_draft_headings and len(draft_matches) != len(any_draft_headings):
+        raise ConfigError("Use exact draft headings: ### Draft 1 — recipient / purpose.")
+    draft_numbers = [int(match.group(1)) for match in draft_matches]
+    if draft_numbers not in ([], [1], [1, 2]):
+        raise ConfigError("Include at most two drafts, numbered consecutively from Draft 1.")
+
+    draft_counts: list[int] = []
+    for index, match in enumerate(draft_matches):
+        end = draft_matches[index + 1].start() if index + 1 < len(draft_matches) else len(text)
+        count = visible_word_count(text[match.end():end])
+        if count > BRIEF_DRAFT_WORD_LIMIT:
+            raise ConfigError(
+                f"Draft {index + 1} is {count} words; follow-up drafts allow at most "
+                f"{BRIEF_DRAFT_WORD_LIMIT} words each."
+            )
+        draft_counts.append(count)
+    if sum(draft_counts) > BRIEF_DRAFT_SECTION_WORD_LIMIT:
+        raise ConfigError(
+            f"Follow-up drafts total {sum(draft_counts)} words; the separate draft "
+            f"section allows at most {BRIEF_DRAFT_SECTION_WORD_LIMIT} words."
+        )
+
+    core_text = text
+    if has_draft_section:
+        core_text = re.split(
+            rf"^##\s+{re.escape(OPTIONAL_DRAFTS_SECTION)}\s*$",
+            text,
+            maxsplit=1,
+            flags=re.MULTILINE,
+        )[0]
+    word_count = visible_word_count(core_text)
+    word_limit = BRIEF_LENGTH_WORD_LIMITS[brief_length_minutes]
+    if word_count > word_limit:
+        raise ConfigError(
+            f"The brief is {word_count} words; the {brief_length_minutes}-minute "
+            f"preference allows at most {word_limit} words in the seven-section core brief."
+        )
+    return word_count, word_limit, draft_counts
 
 
 def review_candidates(config: dict[str, Any]) -> list[tuple[str, str]]:
@@ -306,6 +438,8 @@ def render_config_block(config: dict[str, Any]) -> str:
         for source in config["sources"]
     )
     drafts = "yes" if config["include_follow_up_drafts"] else "no"
+    brief_length = config["brief_length_minutes"]
+    brief_limit = BRIEF_LENGTH_WORD_LIMITS[brief_length]
     return f"""{BEGIN_MARKER}
 ## CEO operating context
 
@@ -322,7 +456,8 @@ def render_config_block(config: dict[str, Any]) -> str:
 {bullet_lines(config['priority_stakeholders'])}
 - **Escalate when:**
 {bullet_lines(config['escalation_triggers'])}
-- **Brief preference:** {markdown_text(config['brief_preference'])}
+- **Brief length:** {brief_length} minutes — {brief_limit:,}-word core brief maximum; follow-up drafts use separate limits
+- **Brief style:** {markdown_text(config['brief_preference'])}
 - **Include follow-up drafts:** {drafts}
 
 ### Configured information sources
@@ -390,6 +525,8 @@ def render_approval_preview(
         for source in config["sources"]
     )
     drafts = "yes, never sent automatically" if config["include_follow_up_drafts"] else "no"
+    brief_length = config["brief_length_minutes"]
+    brief_limit = BRIEF_LENGTH_WORD_LIMITS[brief_length]
     action, approval = platform_approval_action(platform, is_update)
     unchanged = (
         "Nothing has been written or installed yet. Your existing skill has not been changed yet."
@@ -406,6 +543,7 @@ def render_approval_preview(
 {sources}
 **Priority stakeholders:** {stakeholders}
 **Escalate when:** {escalations}
+**Brief length:** {brief_length} minutes — {brief_limit:,}-word core brief maximum; follow-up drafts use separate limits
 **Brief style:** {markdown_text(config['brief_preference'])}
 **Follow-up drafts:** {drafts}
 
@@ -594,8 +732,8 @@ def bundle_contents(root: Path = SKILL_ROOT) -> dict[str, bytes]:
     if not re.match(r"\A---\nname: chief-of-staff-lite\n", skill):
         raise ConfigError("The skill is not recognized as Chief of Staff Lite. Reinstall the standalone skill.")
     replace_config_block(skill, BEGIN_MARKER + END_MARKER)
-    if "<!-- CSL-ADAPTED-WORKFLOW:3 -->" not in skill:
-        raise ConfigError("This installed version does not support the current adapted-workflow and seven-section contract. Preserve its context and replace the complete standalone skill before updating setup; no files were changed.")
+    if "<!-- CSL-ADAPTED-WORKFLOW:4 -->" not in skill:
+        raise ConfigError("This installed version does not support the current adapted-workflow, checked length budgets, and seven-section contract. Preserve its context and replace the complete standalone skill before updating setup; no files were changed.")
     validate_bundle_links(contents)
     return contents
 
@@ -616,7 +754,7 @@ def approval_hash(contents: dict[str, bytes], destination: str, current: str, ac
 
 REVIEW_CRITERIA = (
     "adapted_work", "seven_sections", "source_scope", "action_limits",
-    "evidence_reconciliation", "context_fidelity",
+    "length_budget", "evidence_reconciliation", "context_fidelity",
 )
 
 
@@ -748,6 +886,22 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Verify the standalone skill and its bundled resources.",
     )
+    parser.add_argument(
+        "--check-brief-stdin",
+        action="store_true",
+        help="Validate one completed Markdown brief supplied on standard input.",
+    )
+    parser.add_argument(
+        "--brief-length-minutes",
+        type=int,
+        choices=sorted(BRIEF_LENGTH_WORD_LIMITS),
+        help="Configured reading-time choice for --check-brief-stdin.",
+    )
+    parser.add_argument(
+        "--drafts-enabled",
+        choices=("yes", "no"),
+        help="Configured follow-up-draft setting for --check-brief-stdin.",
+    )
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--approved-hash")
     return parser.parse_args()
@@ -760,8 +914,26 @@ def main() -> int:
         if args.check_bundle:
             print("BUNDLE_OK: standalone skill and customization resources are present.")
             return 0
+        if args.check_brief_stdin:
+            if args.brief_length_minutes is None or args.drafts_enabled is None:
+                raise ConfigError(
+                    "--check-brief-stdin requires --brief-length-minutes and --drafts-enabled."
+                )
+            word_count, word_limit, draft_counts = validate_brief_output(
+                read_brief_payload(),
+                args.brief_length_minutes,
+                args.drafts_enabled == "yes",
+            )
+            draft_summary = ",".join(str(count) for count in draft_counts) or "none"
+            print(
+                f"BRIEF_OK core_words={word_count} core_max={word_limit} "
+                f"draft_words={draft_summary}"
+            )
+            return 0
         if args.platform is None or not args.config_stdin:
-            raise ConfigError("--platform and --config-stdin are required unless --check-bundle is used.")
+            raise ConfigError(
+                "--platform and --config-stdin are required unless a check mode is used."
+            )
         payload = read_config_payload()
         procedure_review = payload.pop("_procedure_review", None) if isinstance(payload, dict) else None
         config = validate_config(payload)
@@ -801,7 +973,7 @@ def main() -> int:
         procedure_digest = approval_hash(contents, destination, current_skill, "procedure review")
         if procedure_review is None:
             print(f"PROCEDURE_REVIEW_HASH={procedure_digest}")
-            print("PROCEDURE_REVIEW_REQUIRED: review all six criteria in references/customization.md; supply _procedure_review in JSON stdin.")
+            print("PROCEDURE_REVIEW_REQUIRED: review all seven criteria in references/customization.md; supply _procedure_review in JSON stdin.")
             print("PREVIEW_WITHHELD: no approval preview or files until the procedure passes review.")
             return 4
         validate_procedure_review(procedure_review, procedure_digest, config)
