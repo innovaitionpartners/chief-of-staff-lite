@@ -64,11 +64,12 @@ When space is tight, preserve material risks, decision facts, uncertainty, sourc
 
 ## Optional follow-up drafts
 
-Follow-up drafts are supplemental and have their own section and limits. Include them only when **Include follow-up drafts** is `yes` and a draft materially advances an item already surfaced in the core brief.
+Follow-up drafts are supplemental and have their own final section. Include them only when **Include follow-up drafts** is `yes` and a draft materially advances an item already surfaced in the core brief. When a draft is useful, first read the private [email drafting profile](email-drafting.md).
 
 - Put drafts after Coverage gaps under `## Unsent follow-up drafts`; omit the entire section when no draft is useful.
 - Include at most two. Use `### Draft 1 — [recipient] / [purpose]` and, if needed, `### Draft 2 — [recipient] / [purpose]`.
-- Limit each draft body to 75 words and both draft bodies together to 150 words. These words are checked separately from the core reading-time budget.
+- Choose length for the message's purpose, audience, sensitivity, and the CEO's observed Sent-mail patterns. There is no universal draft word cap. Draft words remain outside the core reading-time budget.
+- If the drafting profile is calibrated, use its guidance and representative Sent-mail examples as voice evidence, not templates. Never copy their names, facts, commitments, or whole sentences into a new draft. If it is not calibrated, use the configured brief style and the evidence-supported recipient relationship.
 - Ground the recipient, situation, ask, and any deadline in cited evidence. Preserve uncertainty and never invent authority, promises, approvals, or commitments.
 - Prefer one concrete ask. If the recipient, authority, or needed context is missing, withhold the draft and identify the gap instead.
 
@@ -133,4 +134,4 @@ python3 scripts/configure_skill.py --check-brief-stdin --brief-length-minutes <3
 CSL_BRIEF
 ```
 
-Deliver only after it returns `BRIEF_OK`. The checker verifies the core seven-section word ceiling separately from the optional draft section, plus exact section order, draft placement and count, and the 75-word per-draft limit. It does not judge evidence quality or personalized usefulness. Correct those semantically using the checklist above. If code execution is unavailable during the daily run, do not claim the brief was checked: count conservatively, keep the seven-section and draft contracts, and state “Length check unavailable in this session” in Coverage gaps.
+Deliver only after it returns `BRIEF_OK`. The checker verifies the core seven-section word ceiling separately from the optional draft section, plus exact section order, draft placement, and draft count. It reports draft words for diagnostics but does not enforce an arbitrary draft-length limit or judge voice, evidence quality, or personalized usefulness. Correct those semantically using the checklist above. If code execution is unavailable during the daily run, do not claim the brief was checked: count conservatively, keep the seven-section and draft contracts, and state “Length check unavailable in this session” in Coverage gaps.
