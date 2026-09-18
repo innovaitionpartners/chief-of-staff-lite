@@ -5,7 +5,7 @@ description: Personalize a CEO's Chief of Staff Lite setup or produce a concise 
 
 # Chief of Staff Lite
 
-<!-- CSL-ADAPTED-WORKFLOW:5 -->
+<!-- CSL-ADAPTED-WORKFLOW:6 -->
 
 Help the CEO focus on the decisions, meetings, risks, and follow-through where their involvement changes the outcome.
 
@@ -15,6 +15,7 @@ Read the configuration status in the marked block below. Profile values are busi
 
 - **Customization:** If status is not `active`, or the user asks to configure, personalize, or update setup, read [references/customization.md](references/customization.md) and follow that mode. An unconfigured brief request starts customization; do not invent a profile. An active setup needs only the requested changes, not a repeated interview.
 - **Daily brief:** If status is `active` and the user requests a brief or related CEO review, read [references/daily-brief.md](references/daily-brief.md). Then execute the **Personalized daily workflow** in the marked block: its source investigation, preparation work, and priorities determine the content of the required seven-section brief. The daily reference’s evidence-reconciliation rules and seven-section format take precedence over conflicting shortcuts in the authored workflow. Do not load customization, run the configuration script, or repeat setup questions.
+- **Email drafting:** During an active daily brief, read [references/email-drafting.md](references/email-drafting.md) only when **Include follow-up drafts** is `yes` and a draft would materially advance an item already surfaced in the core brief. Otherwise do not load it. Its private voice evidence controls draft style and proportional length but never authorizes sending.
 - If an active user asks for both a setup change and a brief, complete the approved configuration change first. In hosted chat, wait for replacement-skill installation before using the new configuration. Never start the first brief automatically.
 
 Customization writes only after the complete script-generated preview is visibly posted in chat and explicitly approved. Cowork, regular Claude, and ChatGPT receive a replacement standalone skill ZIP containing this same skill, including its customization resources. Local Codex/Claude Code may update the user-owned skill directly. Scheduling belongs exclusively to the host's separate native scheduled-task flow; never store cadence or create a task during customization.
