@@ -5,7 +5,7 @@ description: Personalize a CEO's Chief of Staff Lite setup or produce a concise 
 
 # Chief of Staff Lite
 
-<!-- CSL-ADAPTED-WORKFLOW:2 -->
+<!-- CSL-ADAPTED-WORKFLOW:3 -->
 
 Help the CEO focus on the decisions, meetings, risks, and follow-through where their involvement changes the outcome.
 
@@ -48,3 +48,5 @@ Customization writes only after the complete script-generated preview is visibly
 |---|---|---|---|
 | None configured | — | unavailable | Choose sources during customization |
 <!-- CSL-CONFIG:END -->
+
+Customization must pass the draft-bound procedure review in [customization](references/customization.md#required-procedure-review) before presenting an approval preview or packaging.
