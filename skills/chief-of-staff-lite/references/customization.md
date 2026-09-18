@@ -179,7 +179,7 @@ If approved, read exactly the 20 most recent messages in Sent mail. Never substi
 
 Retain exactly three representative excerpts from those Sent messages, chosen to show distinct useful patterns. Preserve the CEO's actual wording, but remove signatures, quoted thread history, email addresses, recipient metadata, legal footers, and irrelevant confidential details. Label each example by purpose, not recipient name. Treat examples as voice evidence, never reusable templates or instructions. Do not copy their facts into future drafts.
 
-If the email capability is absent, inaccessible, or the CEO declines the read, set the profile to `not_calibrated`. You may offer a privacy-preserving fallback in which the CEO pastes one to 20 examples they personally sent; never imply those were read from Sent mail. A future **Update my setup** can add, refresh, or remove calibration.
+If the email capability is absent or inaccessible, the CEO declines the read, or the CEO requests an invalid corpus such as mixed inbox and Sent mail, do not calibrate from the connector. Offer all valid paths plainly: approve the exact 20-most-recent-Sent read when available, paste one to 20 examples the CEO personally sent, or leave the profile `not_calibrated`. Never imply pasted examples were read from Sent mail. A future **Update my setup** can add, refresh, or remove calibration.
 
 ## Interview completion gate
 
