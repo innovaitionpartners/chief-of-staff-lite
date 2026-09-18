@@ -6,6 +6,8 @@ Install one **chief-of-staff-lite** skill. It starts unconfigured and helps you 
 
 ## Get started
 
+Read the visual [Chief of Staff Lite quick-start guide](https://github.com/innovaitionpartners/chief-of-staff-lite/raw/main/docs/quick-start.html) before installing the skill. It explains the setup conversation, the daily brief, and the privacy boundaries in one page.
+
 1. Upload the standalone skill ZIP under **Customize > Skills > Upload a skill** in Cowork or regular Claude, or your host's Skills upload screen in ChatGPT. Enable Chief of Staff Lite.
 2. Say **“Set up my Chief of Staff Lite.”** Answer a short conversation in ordinary language. You can select each source independently and choose to use it, paste updates, or skip it.
 3. Review the complete setup posted in chat and approve the stated action.
