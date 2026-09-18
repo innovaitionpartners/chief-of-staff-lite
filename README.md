@@ -22,6 +22,8 @@ Customization requires access to the bundled files and Python code execution. If
 
 The brief follows the procedure authored for your work. For example, a CEO overwhelmed by client follow-ups may get a reconciled queue and ready-to-use asks; a CEO weighing investment may get the evidence and tradeoffs for a small set of capital decisions. Both use the same seven sections: Today in one sentence, CEO attention required, Meetings to win, Risks and surprises, Follow-through, Protect the agenda, and Coverage gaps. It ranks signals by strategic impact, urgency, reversibility, and unique CEO leverage, using your priorities as ordered guidance. Substantive items identify sources and distinguish facts from inferences.
 
+Reading-time choices are checked, not treated as vague style hints: the seven-section core brief allows up to 300 words for 3 minutes, 550 for 5 minutes, and 1,000 for 10 minutes. Optional follow-up drafts sit in their own final section, do not count toward the core budget, and are limited to two drafts of 75 words each. All limits are maximums, not targets, so a quiet day stays short while a longer preference creates room for more supported synthesis and preparation.
+
 The skill uses only approved source scopes available in the current session. Setup can see which capability names appear available but does not test account access, connect tools, or read business content. The daily brief checks actual access and reports missing coverage. It can prepare useful follow-up drafts but does not send them.
 
 Scheduling is separate. After installation, use the host’s native scheduled-task flow for recurrence, time, and timezone. Skill customization neither creates a schedule nor stores timing in your briefing preferences.
@@ -55,7 +57,7 @@ skills/chief-of-staff-lite/
 
 `SKILL.md` loads customization only when unconfigured or explicitly asked to change setup. An active brief loads only the daily reference.
 
-Run `python3 skills/chief-of-staff-lite/scripts/configure_skill.py --check-bundle` to validate the bundle. Preview and apply consume JSON through `--config-stdin`. Preview writes nothing, and the approval hash binds the destination, current state, proposed skill, and bundled resources. Existing local skills change only inside the marked configuration block. Hosted packages use a fixed allowlist of the four runtime files and atomic ZIP replacement.
+Run `python3 skills/chief-of-staff-lite/scripts/configure_skill.py --check-bundle` to validate the bundle. Preview and apply consume JSON through `--config-stdin`. Preview writes nothing, and the approval hash binds the destination, current state, proposed skill, and bundled resources. Existing local skills change only inside the marked configuration block. Hosted packages use a fixed allowlist of the four runtime files and atomic ZIP replacement. Daily output is passed through `--check-brief-stdin` with the configured reading-time and draft settings before delivery; that check verifies the core word ceiling, seven-section order, and the separate optional-draft contract.
 
 The maintenance sidecar in the Skills repository holds requirements, behavioral evals, regression tests, and audit evidence. Run its suite against a candidate checkout by setting `CHIEF_OF_STAFF_LITE_RUNTIME_ROOT` to this repository and running `python3 -m unittest discover -s <sidecar>/tests -v`.
 
