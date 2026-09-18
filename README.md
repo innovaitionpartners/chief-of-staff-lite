@@ -2,7 +2,7 @@
 
 A lightweight, personalized daily briefing skill for CEOs, created by **InnovAItion Partners**.
 
-Install one **chief-of-staff-lite** skill. It starts unconfigured and helps you clarify your mandate, priorities, CEO-only decisions, stakeholders, sources, and briefing preferences. Setup authors a daily procedure around those answers: source investigation, evidence cross-checks, useful preparation, judgment, and the structure of your brief. After you approve the setup, that procedure becomes part of the installed skill. Say **“Update my setup”** whenever those details change.
+Install one **chief-of-staff-lite** skill. It starts unconfigured and helps you clarify your mandate, priorities, CEO-only decisions, stakeholders, sources, and briefing preferences. Setup authors a daily procedure around those answers: source investigation, evidence cross-checks, useful preparation, judgment, and the content of your seven-section brief. After you approve the setup, that procedure becomes part of the installed skill. Say **“Update my setup”** whenever those details change.
 
 ## Get started
 
@@ -20,7 +20,7 @@ Customization requires access to the bundled files and Python code execution. If
 
 ## What the brief does
 
-The brief follows the procedure authored for your work. For example, a CEO overwhelmed by client follow-ups may get a reconciled queue and ready-to-use asks; a CEO weighing investment may get the evidence and tradeoffs for a small set of capital decisions. There is no mandatory seven-section template. It ranks signals by strategic impact, urgency, reversibility, and unique CEO leverage, using your priorities as ordered guidance. Substantive items identify sources and distinguish facts from inferences.
+The brief follows the procedure authored for your work. For example, a CEO overwhelmed by client follow-ups may get a reconciled queue and ready-to-use asks; a CEO weighing investment may get the evidence and tradeoffs for a small set of capital decisions. Both use the same seven sections: Today in one sentence, CEO attention required, Meetings to win, Risks and surprises, Follow-through, Protect the agenda, and Coverage gaps. It ranks signals by strategic impact, urgency, reversibility, and unique CEO leverage, using your priorities as ordered guidance. Substantive items identify sources and distinguish facts from inferences.
 
 The skill uses only approved source scopes available in the current session. Setup can see which capability names appear available but does not test account access, connect tools, or read business content. The daily brief checks actual access and reports missing coverage. It can prepare useful follow-up drafts but does not send them.
 
